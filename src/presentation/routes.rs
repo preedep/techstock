@@ -1,4 +1,4 @@
-use actix_web::{web, App};
+use actix_web::{web, App, middleware::DefaultHeaders};
 use actix_cors::Cors;
 use actix_files::Files;
 use std::sync::Arc;
@@ -65,6 +65,12 @@ pub fn create_app(
                 .allow_any_origin()
                 .allow_any_method()
                 .allow_any_header()
+        )
+        .wrap(
+            DefaultHeaders::new()
+                .add(("Cache-Control", "no-cache, no-store, must-revalidate"))
+                .add(("Pragma", "no-cache"))
+                .add(("Expires", "0"))
         )
         .configure(configure_routes)
         .service(Files::new("/", "./static").index_file("index.html"))

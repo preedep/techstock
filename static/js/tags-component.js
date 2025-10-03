@@ -134,8 +134,15 @@ class TagsDropdown {
 
     async loadAvailableTags() {
         try {
+            console.log('Loading tags from API...');
             const response = await fetch('/api/v1/tags');
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            
             const data = await response.json();
+            console.log('Tags API response:', data);
             
             if (data.success) {
                 const tagsData = data.data;

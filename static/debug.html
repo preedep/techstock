@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>TechStock Debug</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .debug-section { margin: 20px 0; padding: 15px; border: 1px solid #ccc; }
+        .debug-output { background: #f5f5f5; padding: 10px; margin: 10px 0; }
+        button { padding: 10px 20px; margin: 5px; }
+    </style>
+</head>
+<body>
+    <h1>TechStock Debug Page</h1>
+    
+    <div class="debug-section">
+        <h2>API Tests</h2>
+        <button onclick="testHealth()">Test Health</button>
+        <button onclick="testResources()">Test Resources</button>
+        <button onclick="testTags()">Test Tags</button>
+        <div id="api-output" class="debug-output"></div>
+    </div>
+
+    <div class="debug-section">
+        <h2>Tags Component Test</h2>
+        <div id="test-tags-container"></div>
+        <button onclick="testTagsComponent()">Initialize Tags</button>
+        <div id="tags-output" class="debug-output"></div>
+    </div>
+
+    <script>
+        async function testHealth() {
+            const output = document.getElementById('api-output');
+            try {
+                const response = await fetch('/health');
+                const data = await response.json();
+                output.innerHTML = '<h3>Health Check:</h3><pre>' + JSON.stringify(data, null, 2) + '</pre>';
+            } catch (error) {
+                output.innerHTML = '<h3>Health Check Error:</h3><pre>' + error.message + '</pre>';
+            }
+        }
+
+        async function testResources() {
+            const output = document.getElementById('api-output');
+            try {
+                const response = await fetch('/api/v1/resources?page=1&size=5');
+                const data = await response.json();
+                output.innerHTML = '<h3>Resources:</h3><pre>' + JSON.stringify(data, null, 2) + '</pre>';
+            } catch (error) {
+                output.innerHTML = '<h3>Resources Error:</h3><pre>' + error.message + '</pre>';
+            }
+        }
+
+        async function testTags() {
+            const output = document.getElementById('api-output');
+            try {
+                const response = await fetch('/api/v1/tags');
+                const data = await response.json();
+                output.innerHTML = '<h3>Tags:</h3><pre>' + JSON.stringify(data, null, 2).substring(0, 1000) + '...</pre>';
+            } catch (error) {
+                output.innerHTML = '<h3>Tags Error:</h3><pre>' + error.message + '</pre>';
+            }
+        }
+
+        function testTagsComponent() {
+            const output = document.getElementById('tags-output');
+            const container = document.getElementById('test-tags-container');
+            
+            // Load tags component scripts
+            const scripts = [
+                '/js/tags-component.js?v=1.0.0'
+            ];
+            
+            let loaded = 0;
+            scripts.forEach(src => {
+                const script = document.createElement('script');
+                script.src = src;
+                script.onload = () => {
+                    loaded++;
+                    if (loaded === scripts.length) {
+                        // Initialize tags component
+                        try {
+                            const tagsDropdown = new TagsDropdown(container, {
+                                placeholder: 'Test tags...',
+                                maxTags: 5,
+                                allowCustom: true
+                            });
+                            output.innerHTML = '<h3>Tags Component:</h3><p>Initialized successfully!</p>';
+                        } catch (error) {
+                            output.innerHTML = '<h3>Tags Component Error:</h3><pre>' + error.message + '</pre>';
+                        }
+                    }
+                };
+                script.onerror = () => {
+                    output.innerHTML = '<h3>Script Load Error:</h3><pre>Failed to load ' + src + '</pre>';
+                };
+                document.head.appendChild(script);
+            });
+        }
+    </script>
+</body>
+</html>

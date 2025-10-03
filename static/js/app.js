@@ -14,6 +14,9 @@ class TechStockApp {
         this.loadingManager = new LoadingManager();
         this.apiClient = new RetryableApiClient('', this.loadingManager, 3);
         
+        // Force no-cache for all requests
+        this.setupNoCacheHeaders();
+        
         // Initialize Tags Components
         this.searchTagsDropdown = null;
         this.modalTagsDropdown = null;
@@ -30,6 +33,20 @@ class TechStockApp {
         this.loadSubscriptions();
         this.loadResources();
         this.setupColumnToggle();
+    }
+
+    setupNoCacheHeaders() {
+        // Override fetch to add no-cache headers
+        const originalFetch = window.fetch;
+        window.fetch = function(url, options = {}) {
+            options.headers = {
+                'Cache-Control': 'no-cache, no-store, must-revalidate',
+                'Pragma': 'no-cache',
+                'Expires': '0',
+                ...options.headers
+            };
+            return originalFetch(url, options);
+        };
     }
 
     setupEventListeners() {
@@ -106,9 +123,12 @@ class TechStockApp {
     }
 
     setupTagsComponents() {
+        console.log('Setting up tags components...');
+        
         // Initialize search tags dropdown
         const searchContainer = document.getElementById('tags-dropdown-container');
         if (searchContainer) {
+            console.log('Found search tags container, initializing...');
             this.searchTagsDropdown = new TagsDropdown(searchContainer, {
                 placeholder: 'ค้นหาด้วย tags...',
                 maxTags: 5,
@@ -117,8 +137,11 @@ class TechStockApp {
 
             // Listen for changes
             searchContainer.addEventListener('tagschange', (e) => {
+                console.log('Tags changed:', e.detail);
                 this.filters.tags = this.searchTagsDropdown.getTagsString();
             });
+        } else {
+            console.error('Search tags container not found!');
         }
 
         // Initialize modal tags dropdown
@@ -312,6 +335,8 @@ class TechStockApp {
 
     async loadResources() {
         try {
+            console.log('Loading resources with filters:', this.filters);
+            
             const params = {
                 page: this.currentPage,
                 size: this.pageSize
@@ -344,14 +369,17 @@ class TechStockApp {
             }
 
             const data = await this.apiClient.getResources(params);
+            console.log('Resources API response:', data);
             
             if (data.success) {
-                this.resources = data.data.items;
+                this.resources = data.data.items || [];
+                console.log('Loaded resources:', this.resources.length);
                 this.renderResources();
                 this.updatePagination(data.data.pagination);
                 this.updateResourceCount(data.data.pagination.total);
                 this.populateFilterOptions();
             } else {
+                console.error('API error:', data.message);
                 this.showToast('Error loading resources: ' + (data.message || 'Unknown error'), 'error');
             }
         } catch (error) {
@@ -361,8 +389,20 @@ class TechStockApp {
     }
 
     renderResources() {
+        console.log('Rendering resources:', this.resources.length);
         const tbody = document.getElementById('resources-tbody');
+        
+        if (!tbody) {
+            console.error('Resources table body not found!');
+            return;
+        }
+        
         tbody.innerHTML = '';
+
+        if (this.resources.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="10" class="text-center">ไม่พบข้อมูล</td></tr>';
+            return;
+        }
 
         this.resources.forEach(resource => {
             const row = document.createElement('tr');
@@ -472,10 +512,14 @@ class TechStockApp {
         const types = [...new Set(this.resources.map(r => r.resource_type).filter(Boolean))];
         const locations = [...new Set(this.resources.map(r => r.location).filter(Boolean))];
         const environments = [...new Set(this.resources.map(r => r.environment).filter(Boolean))];
+        const vendors = [...new Set(this.resources.map(r => r.vendor).filter(Boolean))];
+
+        console.log('Populating filter options:', { types, locations, environments, vendors });
 
         this.populateSelect('type-filter', types);
         this.populateSelect('location-filter', locations);
         this.populateSelect('environment-filter', environments);
+        this.populateSelect('vendor-filter', vendors);
     }
 
     populateSelect(selectId, options) {
@@ -510,6 +554,8 @@ class TechStockApp {
     }
 
     applyFilters() {
+        console.log('Applying filters...');
+        
         this.filters = {
             search: document.getElementById('search-input').value.trim(),
             resource_type: document.getElementById('type-filter').value,
@@ -518,11 +564,15 @@ class TechStockApp {
             vendor: document.getElementById('vendor-filter').value
         };
 
-        // Handle tags search
-        const tagsSearch = document.getElementById('tags-search').value.trim();
-        if (tagsSearch) {
-            this.filters.tags = tagsSearch;
+        // Handle tags from dropdown component
+        if (this.searchTagsDropdown) {
+            const tagsString = this.searchTagsDropdown.getTagsString();
+            if (tagsString) {
+                this.filters.tags = tagsString;
+            }
         }
+
+        console.log('Applied filters:', this.filters);
 
         this.currentPage = 1;
         this.loadResources();
