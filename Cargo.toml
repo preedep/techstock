@@ -8,12 +8,44 @@ name = "import"
 path = "src/bin/import.rs"
 
 [dependencies]
+# Core async runtime
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
-sqlx = { version = "0.8", features = ["runtime-tokio", "postgres", "uuid", "json"] }
-csv = "1.3"
+
+# Web framework
+actix-web = "4.4"
+actix-cors = "0.7"
+
+# Database
+sqlx = { version = "0.8", features = ["runtime-tokio", "postgres", "uuid", "json", "chrono"] }
+
+# Serialization
 serde = { version = "1", features = ["derive"] }
 serde_json = "1.0"
-dotenv = "0.15"
+
+# Date/Time
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1.0", features = ["v4", "serde"] }
+
+# Error handling
 anyhow = "1.0"
+thiserror = "2"
+
+# Configuration
+dotenv = "0.15"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Validation
+validator = { version = "0.18", features = ["derive"] }
+
+# Async traits
+async-trait = "0.1"
+
+# CSV (for import functionality)
+csv = "1.3"
+
+# Legacy logging (for import compatibility)
 pretty_env_logger = "0.5"
 log = "0.4"
