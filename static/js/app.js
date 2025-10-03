@@ -1643,23 +1643,58 @@ class TechStockApp {
         if (!container) return;
 
         const total = resourceTypes.reduce((sum, item) => sum + item.count, 0);
-        const top15 = resourceTypes.slice(0, 15);
+        
+        // Store all types for expand/collapse functionality
+        this.allResourceTypes = resourceTypes;
+        this.isTypesExpanded = this.isTypesExpanded || false;
+        
+        const displayTypes = this.isTypesExpanded ? resourceTypes : resourceTypes.slice(0, 10);
+        const hasMore = resourceTypes.length > 10;
 
-        container.innerHTML = top15.map(item => {
+        let html = displayTypes.map(item => {
             const percentage = item.percentage || ((item.count / total) * 100);
             return `
                 <div class="top-item">
                     <div class="top-item-name" title="${item.resource_type}">${this.truncateText(item.resource_type, 30)}</div>
                     <div class="top-item-stats">
-                        <div class="top-item-count">${item.count}</div>
+                        <div class="top-item-count">${item.count.toLocaleString()}</div>
                         <div class="top-item-percentage">${percentage.toFixed(1)}%</div>
                         <div class="top-item-bar">
-                            <div class="top-item-bar-fill" style="width: ${percentage}%"></div>
+                            <div class="top-item-bar-fill" style="width: ${Math.min(percentage, 100)}%"></div>
                         </div>
                     </div>
                 </div>
             `;
         }).join('');
+
+        // Add expand/collapse button if there are more items
+        if (hasMore) {
+            const remainingCount = resourceTypes.length - (this.isTypesExpanded ? 0 : 10);
+            const buttonText = this.isTypesExpanded 
+                ? 'Show Less' 
+                : `Show All (${remainingCount} more)`;
+            
+            html += `
+                <div class="expand-button-container">
+                    <button class="expand-button" onclick="app.toggleTypesExpansion()">
+                        <span class="expand-icon">${this.isTypesExpanded ? '▲' : '▼'}</span>
+                        ${buttonText}
+                    </button>
+                </div>
+            `;
+        }
+
+        container.innerHTML = html;
+    }
+
+    toggleTypesExpansion() {
+        console.log('Toggling types expansion...');
+        this.isTypesExpanded = !this.isTypesExpanded;
+        
+        // Re-render the list with new expansion state
+        if (this.allResourceTypes) {
+            this.renderTopTypesListFromSummary(this.allResourceTypes);
+        }
     }
 
     renderLocationsChartFromSummary(locations) {
@@ -2176,23 +2211,16 @@ class TechStockApp {
         if (!container) return;
 
         const total = typeData.reduce((sum, item) => sum + item[1], 0);
-        const top15 = typeData.slice(0, 15); // Show more types
-
-        container.innerHTML = top15.map(([type, count]) => {
-            const percentage = ((count / total) * 100).toFixed(1);
-            return `
-                <div class="top-item">
-                    <div class="top-item-name" title="${type}">${this.truncateText(type, 30)}</div>
-                    <div class="top-item-stats">
-                        <div class="top-item-count">${count}</div>
-                        <div class="top-item-percentage">${percentage}%</div>
-                        <div class="top-item-bar">
-                            <div class="top-item-bar-fill" style="width: ${percentage}%"></div>
-                        </div>
-                    </div>
-                </div>
-            `;
-        }).join('');
+        
+        // Convert to same format as summary data
+        const resourceTypes = typeData.map(([type, count]) => ({
+            resource_type: type,
+            count: count,
+            percentage: ((count / total) * 100)
+        }));
+        
+        // Use the same expand logic as summary
+        this.renderTopTypesListFromSummary(resourceTypes);
     }
 
     renderLocationsChart(locationData) {

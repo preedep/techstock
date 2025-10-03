@@ -1186,6 +1186,49 @@ body {
     }
 }
 
+/* ========== Expand Button Styles ========== */
+.expand-button-container {
+    margin-top: 1rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--gray-200);
+    text-align: center;
+}
+
+.expand-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    background: var(--gray-50);
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-md);
+    color: var(--gray-700);
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.expand-button:hover {
+    background: var(--gray-100);
+    border-color: var(--gray-300);
+    color: var(--gray-800);
+}
+
+.expand-button:active {
+    transform: translateY(1px);
+}
+
+.expand-icon {
+    font-size: 0.75rem;
+    color: var(--primary-500);
+    transition: transform 0.2s ease;
+}
+
+.expand-button:hover .expand-icon {
+    transform: scale(1.1);
+}
+
 /* ========== Utilities ========== */
 .text-center { text-align: center; }
 .text-muted { color: var(--gray-500); }
