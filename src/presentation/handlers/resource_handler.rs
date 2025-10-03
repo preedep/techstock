@@ -3,7 +3,7 @@ use validator::Validate;
 use std::sync::Arc;
 
 use crate::{
-    application::{dto::*, services::AppServices, use_cases::ResourceStatistics},
+    application::{dto::*, services::AppServices},
     domain::{
         entities::{CreateResourceRequest, UpdateResourceRequest},
         value_objects::{PaginationParams, ResourceFilters, SortParams, SortDirection},

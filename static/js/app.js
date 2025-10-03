@@ -85,6 +85,7 @@ class TechStockApp {
         this.loadResourceTypes();
         this.loadResources();
         this.setupColumnToggle();
+        this.setupDashboard();
     }
 
     setupNoCacheHeaders() {
@@ -467,6 +468,27 @@ class TechStockApp {
         // Load data for the active tab
         if (tabName === 'subscriptions') {
             this.loadSubscriptions();
+        } else if (tabName === 'dashboard') {
+            // Populate filters first, then load data
+            console.log('Switching to dashboard tab');
+            console.log('Resources available:', this.resources?.length || 0);
+            console.log('Subscriptions available:', this.subscriptions?.length || 0);
+            
+            // Clear filters first to show all data
+            this.dashboardFilters = {
+                timeRange: 'all',
+                subscription: '',
+                resourceGroup: '',
+                environment: '',
+                search: ''
+            };
+            
+            // Clear any existing dashboard resources to force fresh load
+            this.dashboardResources = null;
+            console.log('Cleared existing dashboard resources - will load fresh from API');
+            
+            this.populateDashboardFilters();
+            this.loadDashboardData();
         }
     }
 
@@ -1118,6 +1140,1145 @@ class TechStockApp {
         if (loadingDiv) {
             loadingDiv.remove();
         }
+    }
+
+    // ========== Dashboard Methods ==========
+    setupDashboard() {
+        this.charts = {
+            resourceTypes: null,
+            locations: null,
+            environments: null
+        };
+        
+        this.dashboardFilters = {
+            timeRange: 'all',
+            subscription: '',
+            resourceGroup: '',
+            environment: '',
+            search: ''
+        };
+        
+        this.setupDashboardEventListeners();
+    }
+
+    setupDashboardEventListeners() {
+        // Dashboard controls
+        const refreshBtn = document.getElementById('refresh-dashboard');
+        if (refreshBtn) {
+            refreshBtn.addEventListener('click', () => this.loadDashboardData());
+        }
+
+        const exportBtn = document.getElementById('export-dashboard');
+        if (exportBtn) {
+            exportBtn.addEventListener('click', () => this.exportDashboard());
+        }
+
+        const debugBtn = document.getElementById('debug-resources');
+        if (debugBtn) {
+            debugBtn.addEventListener('click', () => this.debugResources());
+        }
+
+        // Dashboard filters
+        const applyFiltersBtn = document.getElementById('apply-dashboard-filters');
+        if (applyFiltersBtn) {
+            applyFiltersBtn.addEventListener('click', () => this.applyDashboardFilters());
+        }
+
+        const clearFiltersBtn = document.getElementById('clear-dashboard-filters');
+        if (clearFiltersBtn) {
+            clearFiltersBtn.addEventListener('click', () => this.clearDashboardFilters());
+        }
+
+        // Cascading filter listeners
+        const subscriptionSelect = document.getElementById('dashboard-subscription');
+        if (subscriptionSelect) {
+            subscriptionSelect.addEventListener('change', (e) => {
+                this.onSubscriptionFilterChange(e.target.value);
+            });
+        }
+
+        const resourceGroupSelect = document.getElementById('dashboard-resource-group');
+        if (resourceGroupSelect) {
+            resourceGroupSelect.addEventListener('change', (e) => {
+                this.onResourceGroupFilterChange(e.target.value);
+            });
+        }
+
+        const environmentSelect = document.getElementById('dashboard-environment');
+        if (environmentSelect) {
+            environmentSelect.addEventListener('change', (e) => {
+                this.onEnvironmentFilterChange(e.target.value);
+            });
+        }
+
+        // Widget controls
+        document.addEventListener('click', (e) => {
+            if (e.target.closest('.widget-btn')) {
+                const btn = e.target.closest('.widget-btn');
+                const action = btn.dataset.action;
+                const widget = btn.closest('.widget-container');
+                
+                this.handleWidgetAction(widget, action);
+            }
+        });
+
+        // Populate dashboard filter dropdowns
+        this.populateDashboardFilters();
+    }
+
+    populateDashboardFilters() {
+        // Populate subscription dropdown
+        const subscriptionSelect = document.getElementById('dashboard-subscription');
+        if (subscriptionSelect && this.subscriptions) {
+            subscriptionSelect.innerHTML = '<option value="">All Subscriptions</option>';
+            this.subscriptions.forEach(sub => {
+                const option = document.createElement('option');
+                option.value = sub.id;
+                option.textContent = sub.name;
+                subscriptionSelect.appendChild(option);
+            });
+        }
+
+        // Populate resource group dropdown (initially empty)
+        this.populateResourceGroupFilter('');
+
+        // Populate environment dropdown from resources
+        this.populateEnvironmentFilter();
+    }
+
+    async onSubscriptionFilterChange(subscriptionId) {
+        console.log('Subscription filter changed:', subscriptionId);
+        
+        // Update dashboard filters immediately
+        this.dashboardFilters.subscription = subscriptionId;
+        this.dashboardFilters.resourceGroup = ''; // Reset when subscription changes
+        this.dashboardFilters.environment = ''; // Reset when subscription changes
+        
+        // Reset UI elements
+        document.getElementById('dashboard-resource-group').value = '';
+        document.getElementById('dashboard-environment').value = '';
+        
+        // Reset resource group filter
+        await this.populateResourceGroupFilter(subscriptionId);
+        
+        // Reset environment filter based on subscription
+        this.populateEnvironmentFilter(subscriptionId);
+        
+        // Auto-refresh dashboard with new subscription scope
+        console.log('Auto-refreshing dashboard for subscription:', subscriptionId);
+        const subscriptionName = subscriptionId ? this.getSubscriptionName(subscriptionId) : 'All Subscriptions';
+        this.showToast(`Dashboard scope: ${subscriptionName}`, 'info');
+        this.loadDashboardData();
+    }
+
+    onResourceGroupFilterChange(resourceGroupId) {
+        console.log('Resource Group filter changed:', resourceGroupId);
+        
+        // Update dashboard filters immediately
+        this.dashboardFilters.resourceGroup = resourceGroupId;
+        this.dashboardFilters.environment = ''; // Reset when resource group changes
+        
+        // Reset UI elements
+        document.getElementById('dashboard-environment').value = '';
+        
+        // Update environment filter based on resource group
+        this.populateEnvironmentFilter(this.dashboardFilters.subscription, resourceGroupId);
+        
+        // Auto-refresh dashboard with new resource group scope
+        console.log('Auto-refreshing dashboard for resource group:', resourceGroupId);
+        this.loadDashboardData();
+    }
+
+    onEnvironmentFilterChange(environment) {
+        console.log('Environment filter changed:', environment);
+        
+        // Update dashboard filters immediately
+        this.dashboardFilters.environment = environment;
+        
+        // Auto-refresh dashboard with new environment scope
+        console.log('Auto-refreshing dashboard for environment:', environment);
+        this.loadDashboardData();
+    }
+
+    async populateResourceGroupFilter(subscriptionId) {
+        const resourceGroupSelect = document.getElementById('dashboard-resource-group');
+        if (!resourceGroupSelect) return;
+
+        resourceGroupSelect.innerHTML = '<option value="">All Resource Groups</option>';
+        
+        if (!subscriptionId) {
+            // Show all resource groups if no subscription selected
+            if (this.resourceGroups) {
+                this.resourceGroups.forEach(rg => {
+                    const option = document.createElement('option');
+                    option.value = rg.id;
+                    option.textContent = rg.name;
+                    resourceGroupSelect.appendChild(option);
+                });
+            }
+            return;
+        }
+
+        try {
+            // Load resource groups for specific subscription
+            const data = await this.apiClient.getResourceGroupsBySubscription(subscriptionId);
+            if (data.success && data.data) {
+                data.data.forEach(rg => {
+                    const option = document.createElement('option');
+                    option.value = rg.id;
+                    option.textContent = rg.name;
+                    resourceGroupSelect.appendChild(option);
+                });
+            }
+        } catch (error) {
+            console.error('Failed to load resource groups for subscription:', error);
+        }
+    }
+
+    populateEnvironmentFilter(subscriptionId = '', resourceGroupId = '') {
+        const environmentSelect = document.getElementById('dashboard-environment');
+        if (!environmentSelect || !this.resources) return;
+
+        // Filter resources based on current filters
+        let filteredResources = this.resources;
+        
+        if (subscriptionId) {
+            filteredResources = filteredResources.filter(r => r.subscription_id == subscriptionId);
+        }
+        
+        if (resourceGroupId) {
+            filteredResources = filteredResources.filter(r => r.resource_group_id == resourceGroupId);
+        }
+
+        // Get unique environments from filtered resources
+        const environments = [...new Set(filteredResources.map(r => r.environment).filter(Boolean))];
+        
+        environmentSelect.innerHTML = '<option value="">All Environments</option>';
+        environments.forEach(env => {
+            const option = document.createElement('option');
+            option.value = env;
+            option.textContent = env;
+            environmentSelect.appendChild(option);
+        });
+    }
+
+    handleWidgetAction(widget, action) {
+        const widgetType = widget.dataset.widget;
+        
+        switch (action) {
+            case 'expand':
+                this.toggleWidgetExpansion(widget);
+                break;
+            case 'refresh':
+                this.refreshWidget(widgetType);
+                break;
+            case 'settings':
+                this.showWidgetSettings(widgetType);
+                break;
+        }
+    }
+
+    toggleWidgetExpansion(widget) {
+        const isExpanded = widget.classList.contains('expanded');
+        
+        // Collapse all other widgets first
+        document.querySelectorAll('.widget-container.expanded').forEach(w => {
+            if (w !== widget) {
+                w.classList.remove('expanded');
+                const expandBtn = w.querySelector('[data-action="expand"] i');
+                if (expandBtn) {
+                    expandBtn.className = 'fas fa-expand';
+                }
+            }
+        });
+        
+        // Toggle current widget
+        widget.classList.toggle('expanded');
+        const expandBtn = widget.querySelector('[data-action="expand"] i');
+        if (expandBtn) {
+            expandBtn.className = isExpanded ? 'fas fa-expand' : 'fas fa-compress';
+        }
+        
+        // Refresh chart if expanded
+        if (!isExpanded) {
+            const widgetType = widget.dataset.widget;
+            setTimeout(() => this.refreshWidget(widgetType), 300);
+        }
+    }
+
+    refreshWidget(widgetType) {
+        console.log(`Refreshing widget: ${widgetType}`);
+        // Add specific refresh logic for each widget type
+        this.loadDashboardData();
+    }
+
+    showWidgetSettings(widgetType) {
+        console.log(`Showing settings for widget: ${widgetType}`);
+        // Add widget-specific settings modal
+        this.showToast(`Settings for ${widgetType} widget`, 'info');
+    }
+
+    applyDashboardFilters() {
+        // Get filter values
+        this.dashboardFilters = {
+            timeRange: document.getElementById('dashboard-timerange')?.value || 'all',
+            subscription: document.getElementById('dashboard-subscription')?.value || '',
+            resourceGroup: document.getElementById('dashboard-resource-group')?.value || '',
+            environment: document.getElementById('dashboard-environment')?.value || '',
+            search: document.getElementById('dashboard-search')?.value || ''
+        };
+        
+        console.log('Applying dashboard filters:', this.dashboardFilters);
+        
+        // Reload dashboard with filters
+        this.loadDashboardData();
+    }
+
+    exportDashboard() {
+        console.log('Exporting dashboard...');
+        this.showToast('Dashboard export feature coming soon!', 'info');
+    }
+
+    debugResources() {
+        console.log('=== DEBUG RESOURCES ===');
+        console.log('Main resources loaded:', this.resources?.length || 0);
+        console.log('Dashboard resources loaded:', this.dashboardResources?.length || 0);
+        console.log('Current filters:', this.dashboardFilters);
+        
+        if (this.resources && this.resources.length > 0) {
+            // Show sample resources
+            console.log('Sample resources (first 5):');
+            this.resources.slice(0, 5).forEach((resource, index) => {
+                console.log(`${index + 1}.`, {
+                    name: resource.name,
+                    type: resource.resource_type,
+                    location: resource.location,
+                    environment: resource.environment,
+                    subscription_id: resource.subscription_id,
+                    resource_group_id: resource.resource_group_id
+                });
+            });
+            
+            // Show unique resource types from main resources
+            const uniqueTypes = [...new Set(this.resources.map(r => r.resource_type))];
+            console.log('Main resources - unique types:', uniqueTypes);
+            
+            // Show unique resource types from dashboard resources
+            if (this.dashboardResources && this.dashboardResources.length > 0) {
+                const dashboardUniqueTypes = [...new Set(this.dashboardResources.map(r => r.resource_type))];
+                console.log('Dashboard resources - unique types:', dashboardUniqueTypes);
+                console.log('Dashboard resources sample (first 5):');
+                this.dashboardResources.slice(0, 5).forEach((resource, index) => {
+                    console.log(`Dashboard ${index + 1}.`, {
+                        name: resource.name,
+                        type: resource.resource_type,
+                        location: resource.location,
+                        environment: resource.environment
+                    });
+                });
+            }
+            
+            // Show filtered resources
+            const filtered = this.getFilteredResources();
+            console.log('Filtered resources count:', filtered.length);
+            
+            if (filtered.length > 0) {
+                const typeStats = {};
+                filtered.forEach(r => {
+                    const type = r.resource_type || 'Unknown';
+                    typeStats[type] = (typeStats[type] || 0) + 1;
+                });
+                console.log('Type distribution in filtered data:', typeStats);
+            }
+        } else {
+            console.log('No resources loaded!');
+        }
+        
+        this.showToast('Debug info logged to console (F12)', 'info');
+    }
+
+    // Manual test function - call from console
+    async testDashboardAPI() {
+        console.log('=== MANUAL DASHBOARD API TEST ===');
+        try {
+            const result = await this.loadResourcesForDashboard();
+            console.log('Test result:', result?.length || 0, 'resources');
+            return result;
+        } catch (error) {
+            console.error('Test failed:', error);
+            return null;
+        }
+    }
+
+    // Manual clear and reload - call from console
+    async forceReloadDashboard() {
+        console.log('=== FORCE RELOAD DASHBOARD ===');
+        
+        // Clear all filters
+        this.dashboardFilters = {
+            timeRange: 'all',
+            subscription: '',
+            resourceGroup: '',
+            environment: '',
+            search: ''
+        };
+        
+        // Clear existing dashboard resources to force fresh API call
+        this.dashboardResources = null;
+        console.log('Cleared dashboard resources - forcing fresh API call');
+        
+        // Reset UI
+        document.getElementById('dashboard-subscription').value = '';
+        document.getElementById('dashboard-resource-group').value = '';
+        document.getElementById('dashboard-environment').value = '';
+        document.getElementById('dashboard-search').value = '';
+        
+        // Force reload
+        await this.loadDashboardData();
+        console.log('Dashboard force reloaded with fresh API data');
+    }
+
+    updateDashboardWithSummary(summary) {
+        console.log('=== UPDATING DASHBOARD WITH SUMMARY ===');
+        console.log('Summary data:', summary);
+        
+        // Update stats cards
+        document.getElementById('total-resources').textContent = summary.total_resources || 0;
+        document.getElementById('total-types').textContent = summary.resource_types?.length || 0;
+        document.getElementById('total-locations').textContent = summary.total_locations || 0;
+        document.getElementById('total-subscriptions').textContent = summary.total_subscriptions || 0;
+        
+        // Update health indicators
+        if (summary.health_summary) {
+            document.getElementById('healthy-resources').textContent = summary.health_summary.healthy || 0;
+            document.getElementById('warning-resources').textContent = summary.health_summary.warning || 0;
+            document.getElementById('critical-resources').textContent = summary.health_summary.critical || 0;
+        }
+        
+        // Update cost analysis
+        if (summary.cost_summary) {
+            document.getElementById('monthly-cost').textContent = `$${summary.cost_summary.estimated_monthly_cost?.toFixed(2) || '0.00'}`;
+            document.getElementById('top-cost-driver').textContent = summary.cost_summary.top_cost_driver || 'N/A';
+        }
+        
+        // Render charts with summary data
+        this.renderChartsFromSummary(summary);
+    }
+
+    renderChartsFromSummary(summary) {
+        console.log('=== RENDERING CHARTS FROM SUMMARY ===');
+        console.log('Summary for charts:', summary);
+        
+        // Render resource types chart
+        if (summary.resource_types && summary.resource_types.length > 0) {
+            console.log('Rendering resource types chart with', summary.resource_types.length, 'types');
+            this.renderResourceTypesChartFromSummary(summary.resource_types);
+            this.renderTopTypesListFromSummary(summary.resource_types);
+        }
+        
+        // Render locations chart
+        if (summary.locations && summary.locations.length > 0) {
+            console.log('Rendering locations chart with', summary.locations.length, 'locations');
+            this.renderLocationsChartFromSummary(summary.locations);
+        }
+        
+        // Render environments chart
+        if (summary.environments && summary.environments.length > 0) {
+            console.log('Rendering environments chart with', summary.environments.length, 'environments');
+            this.renderEnvironmentsChartFromSummary(summary.environments);
+        }
+    }
+
+    renderResourceTypesChartFromSummary(resourceTypes) {
+        const ctx = document.getElementById('resource-types-chart');
+        if (!ctx) return;
+
+        // Destroy existing chart
+        if (this.charts.resourceTypes) {
+            this.charts.resourceTypes.destroy();
+        }
+
+        console.log('Rendering resource types chart from summary:', resourceTypes.length, 'types');
+
+        // Get top 15 types for pie chart
+        const top15 = resourceTypes.slice(0, 15);
+        const others = resourceTypes.slice(15).reduce((sum, item) => sum + item.count, 0);
+        
+        if (others > 0) {
+            top15.push({ resource_type: 'Others', count: others });
+        }
+
+        const colors = [
+            '#3B82F6', '#EF4444', '#10B981', '#F59E0B', '#8B5CF6',
+            '#06B6D4', '#F97316', '#84CC16', '#EC4899', '#6B7280', 
+            '#9CA3AF', '#F472B6', '#A78BFA', '#34D399', '#FBBF24',
+            '#FB7185'
+        ];
+
+        this.charts.resourceTypes = new Chart(ctx, {
+            type: 'pie',
+            data: {
+                labels: top15.map(item => this.truncateText(item.resource_type, 25)),
+                datasets: [{
+                    data: top15.map(item => item.count),
+                    backgroundColor: colors,
+                    borderWidth: 2,
+                    borderColor: '#ffffff'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                }
+            }
+        });
+    }
+
+    renderTopTypesListFromSummary(resourceTypes) {
+        const container = document.getElementById('top-types-list');
+        if (!container) return;
+
+        const total = resourceTypes.reduce((sum, item) => sum + item.count, 0);
+        const top15 = resourceTypes.slice(0, 15);
+
+        container.innerHTML = top15.map(item => {
+            const percentage = item.percentage || ((item.count / total) * 100);
+            return `
+                <div class="top-item">
+                    <div class="top-item-name" title="${item.resource_type}">${this.truncateText(item.resource_type, 30)}</div>
+                    <div class="top-item-stats">
+                        <div class="top-item-count">${item.count}</div>
+                        <div class="top-item-percentage">${percentage.toFixed(1)}%</div>
+                        <div class="top-item-bar">
+                            <div class="top-item-bar-fill" style="width: ${percentage}%"></div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    renderLocationsChartFromSummary(locations) {
+        // Similar implementation for locations chart
+        console.log('Rendering locations chart from summary');
+    }
+
+    renderEnvironmentsChartFromSummary(environments) {
+        // Similar implementation for environments chart  
+        console.log('Rendering environments chart from summary');
+    }
+
+    // Check data sources - call from console
+    checkDataSources() {
+        console.log('=== DATA SOURCES CHECK ===');
+        console.log('this.resources:', this.resources?.length || 0);
+        console.log('this.dashboardResources:', this.dashboardResources?.length || 0);
+        
+        if (this.resources && this.resources.length > 0) {
+            const mainTypes = [...new Set(this.resources.map(r => r.resource_type))];
+            console.log('Main resources types:', mainTypes);
+        }
+        
+        if (this.dashboardResources && this.dashboardResources.length > 0) {
+            const dashboardTypes = [...new Set(this.dashboardResources.map(r => r.resource_type))];
+            console.log('Dashboard resources types:', dashboardTypes);
+            console.log('Dashboard types count:', dashboardTypes.length);
+            
+            // Compare with expected database numbers
+            console.log('Expected from database: 62,289 resources, 80+ types');
+            if (this.dashboardResources.length < 60000) {
+                console.warn('⚠️  Dashboard has fewer resources than database');
+            }
+            if (dashboardTypes.length < 50) {
+                console.warn('⚠️  Dashboard has fewer types than database');
+            }
+        }
+        
+        // Check if they're the same
+        const same = this.resources === this.dashboardResources;
+        console.log('Same object reference:', same);
+        
+        if (same) {
+            console.warn('⚠️  WARNING: Dashboard is using same data as main resources!');
+            console.warn('Dashboard should have independent API data');
+        } else {
+            console.log('✅ Dashboard has independent data source');
+        }
+    }
+
+    // Test API directly - call from console
+    async testAPIDirectly() {
+        console.log('=== TESTING API DIRECTLY ===');
+        try {
+            const params = { page: 1, per_page: 100000 };
+            console.log('Calling API with params:', params);
+            
+            const data = await this.apiClient.getResources(params);
+            console.log('Raw API response:', data);
+            
+            if (data.success) {
+                const resources = Array.isArray(data.data) ? data.data : 
+                                (data.data?.resources || data.data?.data || []);
+                
+                console.log('Resources count:', resources.length);
+                console.log('Expected: 62,289');
+                
+                const types = [...new Set(resources.map(r => r.resource_type))];
+                console.log('Types count:', types.length);
+                console.log('Expected: 80+');
+                
+                return { count: resources.length, types: types.length, data: resources };
+            } else {
+                console.error('API failed:', data.message);
+                return null;
+            }
+        } catch (error) {
+            console.error('API test failed:', error);
+            return null;
+        }
+    }
+
+    async loadDashboardSummary() {
+        try {
+            console.log('=== LOADING DASHBOARD SUMMARY ===');
+            console.log('Calling Dashboard Summary API...');
+            
+            // Build filters from current dashboard filters
+            const filters = {};
+            if (this.dashboardFilters.subscription && this.dashboardFilters.subscription !== '') {
+                filters.subscription_id = parseInt(this.dashboardFilters.subscription);
+            }
+            if (this.dashboardFilters.resourceGroup && this.dashboardFilters.resourceGroup !== '') {
+                filters.resource_group_id = parseInt(this.dashboardFilters.resourceGroup);
+            }
+            if (this.dashboardFilters.environment && this.dashboardFilters.environment !== '') {
+                filters.environment = this.dashboardFilters.environment;
+            }
+            if (this.dashboardFilters.timeRange && this.dashboardFilters.timeRange !== 'all') {
+                filters.time_range = this.dashboardFilters.timeRange;
+            }
+            
+            console.log('Dashboard API filters:', filters);
+            console.log('Making API call to getDashboardSummary...');
+            console.log('API endpoint: /api/v1/dashboard/summary');
+            
+            const data = await this.apiClient.getDashboardSummary(filters);
+            console.log('API Response received:', data);
+            
+            if (data.success) {
+                const summary = data.data;
+                
+                console.log('Dashboard Summary received:', summary);
+                console.log('Total resources:', summary.total_resources);
+                console.log('Total resource types:', summary.resource_types?.length || 0);
+                
+                // Store dashboard summary
+                this.dashboardSummary = summary;
+                console.log('Dashboard summary stored successfully');
+                
+                return summary;
+            } else {
+                console.error('Failed to load resources for dashboard:', data.message);
+                throw new Error(data.message || 'Failed to load resources');
+            }
+        } catch (error) {
+            console.error('=== ERROR LOADING DASHBOARD RESOURCES ===');
+            console.error('Error details:', error);
+            
+            // NO FALLBACK - Dashboard must have its own fresh data
+            console.error('Dashboard API failed - no fallback used');
+            this.dashboardResources = [];
+            this.showToast('Failed to load dashboard data from API. Please check connection and try again.', 'error');
+            throw error;
+        }
+    }
+
+    clearDashboardFilters() {
+        console.log('Clearing all dashboard filters...');
+        
+        // Reset filter values
+        this.dashboardFilters = {
+            timeRange: 'all',
+            subscription: '',
+            resourceGroup: '',
+            environment: '',
+            search: ''
+        };
+        
+        // Reset UI elements
+        document.getElementById('dashboard-timerange').value = 'all';
+        document.getElementById('dashboard-subscription').value = '';
+        document.getElementById('dashboard-resource-group').value = '';
+        document.getElementById('dashboard-environment').value = '';
+        document.getElementById('dashboard-search').value = '';
+        
+        // Repopulate dropdowns with all options
+        this.populateDashboardFilters();
+        
+        // Reload dashboard with no filters
+        this.loadDashboardData();
+        
+        this.showToast('Filters cleared', 'success');
+    }
+
+    async loadDashboardData() {
+        try {
+            console.log('=== LOADING DASHBOARD DATA ===');
+            console.log('Available resources in memory:', this.resources?.length || 0);
+            console.log('Current filters:', this.dashboardFilters);
+            
+            // Load dashboard summary from API
+            console.log('Loading dashboard summary from API...');
+            const dashboardSummary = await this.loadDashboardSummary();
+            
+            if (!dashboardSummary) {
+                console.error('No dashboard summary loaded!');
+                this.showEmptyDashboard();
+                return;
+            }
+            
+            console.log('Successfully loaded dashboard summary');
+            
+            // Update dashboard with summary data
+            this.updateDashboardWithSummary(dashboardSummary);
+            
+        } catch (error) {
+            console.error('Failed to load dashboard data:', error);
+            this.showToast('Failed to load dashboard data', 'error');
+        }
+    }
+
+    getFilteredResources() {
+        // ONLY use dashboard resources - never fall back to main resources
+        if (!this.dashboardResources || this.dashboardResources.length === 0) {
+            console.warn('No dashboardResources available for filtering!');
+            console.warn('this.dashboardResources:', this.dashboardResources?.length || 0);
+            console.warn('this.resources:', this.resources?.length || 0);
+            return [];
+        }
+
+        const sourceResources = this.dashboardResources;
+
+        let filtered = [...sourceResources];
+        console.log('=== FILTERING RESOURCES ===');
+        console.log('Starting with resources:', filtered.length);
+        console.log('Dashboard filters:', this.dashboardFilters);
+
+        // Debug: Show sample resources before filtering
+        if (filtered.length > 0) {
+            console.log('Sample resources before filtering:');
+            filtered.slice(0, 3).forEach((resource, index) => {
+                console.log(`Before filter ${index + 1}:`, {
+                    name: resource.name,
+                    resource_type: resource.resource_type,
+                    subscription_id: resource.subscription_id,
+                    resource_group_id: resource.resource_group_id
+                });
+            });
+        }
+
+        // Apply subscription filter
+        if (this.dashboardFilters.subscription && this.dashboardFilters.subscription !== '') {
+            const beforeCount = filtered.length;
+            console.log(`Applying subscription filter: ${this.dashboardFilters.subscription}`);
+            
+            // Debug: Show what subscription IDs exist
+            const existingSubIds = [...new Set(filtered.map(r => r.subscription_id))];
+            console.log('Existing subscription IDs in data:', existingSubIds);
+            
+            filtered = filtered.filter(r => r.subscription_id == this.dashboardFilters.subscription);
+            console.log(`Subscription filter: ${beforeCount} -> ${filtered.length}`);
+            
+            // If no results, show why
+            if (filtered.length === 0) {
+                console.warn('No resources match subscription filter!');
+                console.warn('Filter value:', this.dashboardFilters.subscription);
+                console.warn('Available subscription IDs:', existingSubIds);
+            }
+        }
+
+        // Apply resource group filter
+        if (this.dashboardFilters.resourceGroup && this.dashboardFilters.resourceGroup !== '') {
+            const beforeCount = filtered.length;
+            filtered = filtered.filter(r => r.resource_group_id == this.dashboardFilters.resourceGroup);
+            console.log(`Resource Group filter: ${beforeCount} -> ${filtered.length}`);
+        }
+
+        // Apply environment filter
+        if (this.dashboardFilters.environment && this.dashboardFilters.environment !== '') {
+            const beforeCount = filtered.length;
+            filtered = filtered.filter(r => r.environment === this.dashboardFilters.environment);
+            console.log(`Environment filter: ${beforeCount} -> ${filtered.length}`);
+        }
+
+        // Apply search filter
+        if (this.dashboardFilters.search && this.dashboardFilters.search.trim() !== '') {
+            const beforeCount = filtered.length;
+            const searchTerm = this.dashboardFilters.search.toLowerCase();
+            filtered = filtered.filter(r => 
+                (r.name && r.name.toLowerCase().includes(searchTerm)) ||
+                (r.resource_type && r.resource_type.toLowerCase().includes(searchTerm)) ||
+                (r.location && r.location.toLowerCase().includes(searchTerm))
+            );
+            console.log(`Search filter: ${beforeCount} -> ${filtered.length}`);
+        }
+
+        console.log(`Final filtered: ${filtered.length} resources from ${sourceResources.length} total`);
+        
+        // Debug: Show final filtered resources and their types
+        if (filtered.length > 0) {
+            console.log('Sample filtered resources:');
+            filtered.slice(0, 5).forEach((resource, index) => {
+                console.log(`Filtered ${index + 1}:`, {
+                    name: resource.name,
+                    resource_type: resource.resource_type,
+                    location: resource.location
+                });
+            });
+            
+            // Show unique types in filtered results
+            const filteredTypes = [...new Set(filtered.map(r => r.resource_type))];
+            console.log('Unique types in filtered results:', filteredTypes);
+        } else {
+            console.warn('No resources after filtering!');
+        }
+        
+        return filtered;
+    }
+
+    generateDashboardStats(resources) {
+        // Generate statistics from filtered resources
+        const byType = {};
+        const byLocation = {};
+        const byEnvironment = {};
+
+        console.log('=== GENERATING DASHBOARD STATS ===');
+        console.log('Generating stats for resources:', resources.length);
+        
+        // Debug: Show first few resources to understand data structure
+        if (resources.length > 0) {
+            console.log('Sample resources for stats generation:');
+            resources.slice(0, 3).forEach((resource, index) => {
+                console.log(`Sample ${index + 1}:`, {
+                    name: resource.name,
+                    resource_type: resource.resource_type,
+                    location: resource.location,
+                    environment: resource.environment
+                });
+            });
+        }
+        
+        // Debug: Show unique resource types
+        const uniqueTypes = new Set();
+        
+        resources.forEach(resource => {
+            // Count by type - use more detailed type information
+            let type = resource.resource_type || 'Unknown';
+            
+            // If type is too generic, try to get more specific info from name or kind
+            if (type === 'Unknown' && resource.name) {
+                // Try to infer type from resource name patterns
+                const name = resource.name.toLowerCase();
+                if (name.includes('vm') || name.includes('virtual')) type = 'Virtual Machine';
+                else if (name.includes('disk')) type = 'Disk';
+                else if (name.includes('network')) type = 'Network Interface';
+                else if (name.includes('storage')) type = 'Storage Account';
+                else if (name.includes('keyvault') || name.includes('key-vault')) type = 'Key Vault';
+                else if (name.includes('app') && name.includes('service')) type = 'App Service';
+                else if (name.includes('sql')) type = 'SQL Database';
+                else if (name.includes('cosmos')) type = 'Cosmos DB';
+                else if (name.includes('function')) type = 'Function App';
+                else if (name.includes('logic')) type = 'Logic App';
+            }
+            
+            uniqueTypes.add(type);
+            byType[type] = (byType[type] || 0) + 1;
+
+            // Count by location
+            const location = resource.location || 'Unknown';
+            byLocation[location] = (byLocation[location] || 0) + 1;
+
+            // Count by environment
+            const environment = resource.environment || 'Unknown';
+            byEnvironment[environment] = (byEnvironment[environment] || 0) + 1;
+        });
+
+        console.log('Unique resource types found:', Array.from(uniqueTypes));
+        console.log('Resource type counts:', byType);
+        console.log('Total types processed:', Object.keys(byType).length);
+
+        // Convert to arrays and sort by count
+        const by_type = Object.entries(byType).sort((a, b) => b[1] - a[1]);
+        const by_location = Object.entries(byLocation).sort((a, b) => b[1] - a[1]);
+        const by_environment = Object.entries(byEnvironment).sort((a, b) => b[1] - a[1]);
+
+        return {
+            by_type,
+            by_location,
+            by_environment,
+            total_resources: resources.length
+        };
+    }
+
+    updateHealthIndicators(resources) {
+        // Mock health data - in real implementation, this would come from monitoring APIs
+        const healthy = Math.floor(resources.length * 0.85);
+        const warning = Math.floor(resources.length * 0.12);
+        const critical = resources.length - healthy - warning;
+
+        document.getElementById('healthy-resources').textContent = healthy;
+        document.getElementById('warning-resources').textContent = warning;
+        document.getElementById('critical-resources').textContent = critical;
+    }
+
+    updateCostAnalysis(resources) {
+        // Mock cost data - in real implementation, this would come from billing APIs
+        const estimatedCost = resources.length * 12.50; // $12.50 per resource average
+        const topCostDriver = resources.length > 0 ? 
+            (resources.find(r => r.resource_type?.includes('Virtual')) ? 'Virtual Machines' : 'Storage Accounts') : 
+            'N/A';
+
+        document.getElementById('monthly-cost').textContent = `$${estimatedCost.toFixed(2)}`;
+        document.getElementById('top-cost-driver').textContent = topCostDriver;
+    }
+
+    showEmptyDashboard() {
+        console.log('Showing empty dashboard state');
+        
+        // Update stats to show 0
+        document.getElementById('total-resources').textContent = '0';
+        document.getElementById('total-types').textContent = '0';
+        document.getElementById('total-locations').textContent = '0';
+        document.getElementById('total-subscriptions').textContent = this.subscriptions?.length || '0';
+        
+        // Update health indicators
+        document.getElementById('healthy-resources').textContent = '0';
+        document.getElementById('warning-resources').textContent = '0';
+        document.getElementById('critical-resources').textContent = '0';
+        
+        // Update cost analysis
+        document.getElementById('monthly-cost').textContent = '$0.00';
+        document.getElementById('top-cost-driver').textContent = 'N/A';
+        
+        // Clear charts
+        Object.values(this.charts).forEach(chart => {
+            if (chart) {
+                chart.destroy();
+            }
+        });
+        
+        // Show message in top types list
+        const topTypesList = document.getElementById('top-types-list');
+        if (topTypesList) {
+            topTypesList.innerHTML = '<div style="text-align: center; padding: 2rem; color: #6B7280;">No resources found. Try clearing filters or loading data from the Resources tab first.</div>';
+        }
+        
+        this.showToast('No resources found. Please load data from the Resources tab first.', 'info');
+    }
+
+    updateDashboardStats(data) {
+        // Update stat cards
+        document.getElementById('total-resources').textContent = 
+            data.by_type.reduce((sum, item) => sum + item[1], 0);
+        document.getElementById('total-types').textContent = data.by_type.length;
+        document.getElementById('total-locations').textContent = data.by_location.length;
+        document.getElementById('total-subscriptions').textContent = this.subscriptions.length;
+    }
+
+    renderCharts(data) {
+        console.log('=== RENDERING CHARTS ===');
+        console.log('Chart data received:', data);
+        console.log('Types for chart:', data.by_type?.length || 0);
+        console.log('First 10 types:', data.by_type?.slice(0, 10));
+        
+        this.renderResourceTypesChart(data.by_type);
+        this.renderTopTypesList(data.by_type);
+        this.renderLocationsChart(data.by_location);
+        this.renderEnvironmentsChart(data.by_environment);
+    }
+
+    renderResourceTypesChart(typeData) {
+        const ctx = document.getElementById('resource-types-chart');
+        if (!ctx) return;
+
+        // Destroy existing chart
+        if (this.charts.resourceTypes) {
+            this.charts.resourceTypes.destroy();
+        }
+
+        console.log('=== RENDERING RESOURCE TYPES CHART ===');
+        console.log('Input typeData:', typeData);
+        console.log('Input typeData length:', typeData?.length || 0);
+        
+        if (!typeData || typeData.length === 0) {
+            console.warn('No typeData provided to chart!');
+            return;
+        }
+
+        // Get top 15 types for pie chart (show more variety)
+        const top15 = typeData.slice(0, 15);
+        console.log('Top 15 types for chart:', top15);
+        const others = typeData.slice(15).reduce((sum, item) => sum + item[1], 0);
+        
+        if (others > 0) {
+            top15.push(['Others', others]);
+        }
+
+        const colors = [
+            '#3B82F6', '#EF4444', '#10B981', '#F59E0B', '#8B5CF6',
+            '#06B6D4', '#F97316', '#84CC16', '#EC4899', '#6B7280', 
+            '#9CA3AF', '#F472B6', '#A78BFA', '#34D399', '#FBBF24',
+            '#FB7185'
+        ];
+
+        this.charts.resourceTypes = new Chart(ctx, {
+            type: 'pie',
+            data: {
+                labels: top15.map(item => this.truncateText(item[0], 25)),
+                datasets: [{
+                    data: top15.map(item => item[1]),
+                    backgroundColor: colors,
+                    borderWidth: 2,
+                    borderColor: '#ffffff'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: {
+                            padding: 20,
+                            usePointStyle: true
+                        }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: (context) => {
+                                const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                const percentage = ((context.raw / total) * 100).toFixed(1);
+                                return `${context.label}: ${context.raw} (${percentage}%)`;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    renderTopTypesList(typeData) {
+        const container = document.getElementById('top-types-list');
+        if (!container) return;
+
+        const total = typeData.reduce((sum, item) => sum + item[1], 0);
+        const top15 = typeData.slice(0, 15); // Show more types
+
+        container.innerHTML = top15.map(([type, count]) => {
+            const percentage = ((count / total) * 100).toFixed(1);
+            return `
+                <div class="top-item">
+                    <div class="top-item-name" title="${type}">${this.truncateText(type, 30)}</div>
+                    <div class="top-item-stats">
+                        <div class="top-item-count">${count}</div>
+                        <div class="top-item-percentage">${percentage}%</div>
+                        <div class="top-item-bar">
+                            <div class="top-item-bar-fill" style="width: ${percentage}%"></div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    renderLocationsChart(locationData) {
+        const ctx = document.getElementById('locations-chart');
+        if (!ctx) return;
+
+        if (this.charts.locations) {
+            this.charts.locations.destroy();
+        }
+
+        const top8 = locationData.slice(0, 8);
+
+        this.charts.locations = new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: top8.map(item => item[0]),
+                datasets: [{
+                    data: top8.map(item => item[1]),
+                    backgroundColor: [
+                        '#3B82F6', '#EF4444', '#10B981', '#F59E0B',
+                        '#8B5CF6', '#06B6D4', '#F97316', '#84CC16'
+                    ],
+                    borderWidth: 2,
+                    borderColor: '#ffffff'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: {
+                            padding: 15,
+                            usePointStyle: true
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    renderEnvironmentsChart(envData) {
+        const ctx = document.getElementById('environments-chart');
+        if (!ctx) return;
+
+        if (this.charts.environments) {
+            this.charts.environments.destroy();
+        }
+
+        this.charts.environments = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: envData.map(item => item[0]),
+                datasets: [{
+                    label: 'Resources',
+                    data: envData.map(item => item[1]),
+                    backgroundColor: '#3B82F6',
+                    borderColor: '#2563EB',
+                    borderWidth: 1,
+                    borderRadius: 4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            stepSize: 1
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    truncateText(text, maxLength) {
+        if (text.length <= maxLength) return text;
+        return text.substring(0, maxLength - 3) + '...';
     }
 
     openResourceModal(resource = null) {

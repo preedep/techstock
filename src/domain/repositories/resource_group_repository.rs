@@ -14,4 +14,5 @@ pub trait ResourceGroupRepository: Send + Sync {
     async fn delete(&self, id: i64) -> DomainResult<()>;
     async fn find_by_subscription_id(&self, subscription_id: i64) -> DomainResult<Vec<ResourceGroup>>;
     async fn find_by_name_and_subscription(&self, name: &str, subscription_id: i64) -> DomainResult<Option<ResourceGroup>>;
+    async fn count_all(&self) -> DomainResult<i64>;
 }

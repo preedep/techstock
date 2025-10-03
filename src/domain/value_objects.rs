@@ -45,11 +45,11 @@ impl PaginationParams {
     }
     
     pub fn size(&self) -> u32 {
-        self.size.unwrap_or(20).clamp(1, 100)
+        self.size.unwrap_or(20).clamp(1, 100000)  // Increase max limit for dashboard
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ResourceFilters {
     pub resource_type: Option<String>,
     pub location: Option<String>,

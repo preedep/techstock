@@ -129,6 +129,11 @@ class ApiClient {
         return this.get(`/api/v1/subscriptions/${subscriptionId}/resources`);
     }
 
+    // Dashboard API
+    async getDashboardSummary(filters = {}) {
+        return this.get('/api/v1/dashboard/summary', filters);
+    }
+
     // Subscriptions API
     async getSubscriptions(params = {}) {
         return this.get('/api/v1/subscriptions', params);
@@ -175,6 +180,11 @@ class ApiClient {
     // Resource Types API
     async getResourceTypes() {
         return this.get('/api/v1/resource-types');
+    }
+
+    // Resource Statistics API
+    async getResourceStatistics() {
+        return this.get('/api/v1/resources/stats');
     }
 }
 

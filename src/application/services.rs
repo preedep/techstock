@@ -7,6 +7,7 @@ pub struct AppServices {
     pub subscription_use_cases: SubscriptionUseCases,
     pub resource_group_use_cases: ResourceGroupUseCases,
     pub application_use_cases: ApplicationUseCases,
+    pub dashboard_use_cases: DashboardUseCases,
 }
 
 impl AppServices {
@@ -17,13 +18,18 @@ impl AppServices {
         application_repository: Arc<dyn ApplicationRepository>,
     ) -> Self {
         Self {
-            resource_use_cases: ResourceUseCases::new(resource_repository),
+            resource_use_cases: ResourceUseCases::new(resource_repository.clone()),
             subscription_use_cases: SubscriptionUseCases::new(subscription_repository.clone()),
             resource_group_use_cases: ResourceGroupUseCases::new(
-                resource_group_repository,
-                subscription_repository,
+                resource_group_repository.clone(),
+                subscription_repository.clone(),
             ),
             application_use_cases: ApplicationUseCases::new(application_repository),
+            dashboard_use_cases: DashboardUseCases::new(
+                resource_repository,
+                subscription_repository,
+                resource_group_repository,
+            ),
         }
     }
 }

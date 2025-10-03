@@ -145,4 +145,13 @@ impl ResourceGroupRepository for PostgresResourceGroupRepository {
             subscription_id: row.get("subscription_id"),
         }))
     }
+
+    async fn count_all(&self) -> DomainResult<i64> {
+        let row = sqlx::query("SELECT COUNT(*) as count FROM resource_group")
+            .fetch_one(&self.pool)
+            .await
+            .map_err(|e| DomainError::database_error(format!("Failed to count resource groups: {}", e)))?;
+        
+        Ok(row.get("count"))
+    }
 }

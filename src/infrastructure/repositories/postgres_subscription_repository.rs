@@ -128,4 +128,13 @@ impl SubscriptionRepository for PostgresSubscriptionRepository {
             tenant_id: row.get("tenant_id"),
         }))
     }
+
+    async fn count_all(&self) -> DomainResult<i64> {
+        let row = sqlx::query("SELECT COUNT(*) as count FROM subscription")
+            .fetch_one(&self.pool)
+            .await
+            .map_err(|e| DomainError::database_error(format!("Failed to count subscriptions: {}", e)))?;
+        
+        Ok(row.get("count"))
+    }
 }

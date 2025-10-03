@@ -51,7 +51,13 @@ pub fn configure_routes(cfg: &mut web::ServiceConfig) {
                 .route("/{id}", web::get().to(get_resource_group_by_id))
         )
         // Resource Types endpoint
-        .route("/api/v1/resource-types", web::get().to(get_resource_types));
+        .route("/api/v1/resource-types", web::get().to(get_resource_types))
+        
+        // Dashboard endpoints
+        .service(
+            web::scope("/api/v1/dashboard")
+                .route("/summary", web::get().to(get_dashboard_summary))
+        );
 }
 
 pub fn create_app(

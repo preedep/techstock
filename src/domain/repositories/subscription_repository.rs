@@ -13,4 +13,5 @@ pub trait SubscriptionRepository: Send + Sync {
     async fn update(&self, id: i64, request: UpdateSubscriptionRequest) -> DomainResult<Subscription>;
     async fn delete(&self, id: i64) -> DomainResult<()>;
     async fn find_by_name(&self, name: &str) -> DomainResult<Option<Subscription>>;
+    async fn count_all(&self) -> DomainResult<i64>;
 }
