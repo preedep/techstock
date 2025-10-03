@@ -396,13 +396,15 @@ body {
 
 .table {
     width: 100%;
+    min-width: 1200px; /* Minimum width to prevent cramping */
     border-collapse: collapse;
     font-size: 0.875rem;
+    margin: 0;
 }
 
 .table th {
     background: var(--gray-50);
-    padding: 1rem;
+    padding: 0.75rem;
     text-align: left;
     font-weight: 600;
     color: var(--gray-700);
@@ -410,13 +412,42 @@ body {
     position: sticky;
     top: 0;
     z-index: 10;
+    white-space: nowrap;
 }
 
+/* Column-specific widths */
+.table th:nth-child(1) { width: 80px; min-width: 80px; }    /* ID */
+.table th:nth-child(2) { width: 200px; min-width: 150px; }  /* Name */
+.table th:nth-child(3) { width: 180px; min-width: 150px; }  /* Type */
+.table th:nth-child(4) { width: 120px; min-width: 100px; }  /* Location */
+.table th:nth-child(5) { width: 150px; min-width: 120px; }  /* Subscription */
+.table th:nth-child(6) { width: 200px; min-width: 150px; }  /* Resource Group */
+.table th:nth-child(7) { width: 100px; min-width: 80px; }   /* Environment */
+.table th:nth-child(8) { width: 100px; min-width: 80px; }   /* Vendor */
+.table th:nth-child(9) { width: 150px; min-width: 120px; }  /* Tags */
+.table th:nth-child(10) { width: 120px; min-width: 100px; } /* Created */
+.table th:nth-child(11) { width: 100px; min-width: 80px; }  /* Actions */
+
 .table td {
-    padding: 1rem;
+    padding: 0.75rem;
     border-bottom: 1px solid var(--gray-100);
     vertical-align: top;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
 }
+
+/* Apply same width constraints to td as th */
+.table td:nth-child(1) { width: 80px; min-width: 80px; }    /* ID */
+.table td:nth-child(2) { width: 200px; min-width: 150px; }  /* Name */
+.table td:nth-child(3) { width: 180px; min-width: 150px; }  /* Type */
+.table td:nth-child(4) { width: 120px; min-width: 100px; }  /* Location */
+.table td:nth-child(5) { width: 150px; min-width: 120px; }  /* Subscription */
+.table td:nth-child(6) { width: 200px; min-width: 150px; }  /* Resource Group */
+.table td:nth-child(7) { width: 100px; min-width: 80px; }   /* Environment */
+.table td:nth-child(8) { width: 100px; min-width: 80px; }   /* Vendor */
+.table td:nth-child(9) { width: 150px; min-width: 120px; }  /* Tags */
+.table td:nth-child(10) { width: 120px; min-width: 100px; } /* Created */
+.table td:nth-child(11) { width: 100px; min-width: 80px; }  /* Actions */
 
 .table tbody tr {
     transition: all 0.2s ease;
@@ -561,6 +592,23 @@ body {
     
     .table-container {
         overflow-x: auto;
+        margin: 0 -1rem; /* Extend to screen edges on mobile */
+    }
+    
+    .table-responsive {
+        border-radius: 0; /* Remove border radius on mobile */
+        border-left: none;
+        border-right: none;
+    }
+    
+    .table {
+        min-width: 1000px; /* Reduce min-width on mobile */
+        font-size: 0.8rem;
+    }
+    
+    .table th,
+    .table td {
+        padding: 0.5rem 0.25rem;
     }
     
     .tags-container {
@@ -614,6 +662,48 @@ body {
 .table-container {
     min-height: 400px;
     position: relative;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+}
+
+/* Responsive table wrapper */
+.table-responsive {
+    width: 100%;
+    overflow-x: auto;
+    overflow-y: visible;
+    -webkit-overflow-scrolling: touch;
+    border: 1px solid var(--gray-200);
+    border-radius: 8px;
+    background: white;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    position: relative;
+}
+
+/* Scroll indicator */
+.table-responsive::after {
+    content: '← Scroll to see more →';
+    position: absolute;
+    bottom: 0;
+    right: 0;
+    background: var(--primary-600);
+    color: white;
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+    border-radius: 4px 0 8px 0;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    pointer-events: none;
+}
+
+.table-responsive:hover::after {
+    opacity: 1;
+}
+
+@media (max-width: 768px) {
+    .table-responsive::after {
+        opacity: 1;
+    }
 }
 
 #resources-tbody {
