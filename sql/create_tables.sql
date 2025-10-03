@@ -51,8 +51,8 @@ CREATE TABLE resource_tag (
 CREATE TABLE resource_application_map (
                                           resource_id    BIGINT REFERENCES resource(id) ON DELETE CASCADE,
                                           application_id BIGINT REFERENCES application(id) ON DELETE CASCADE,
-                                          relation_type  TEXT,  -- 'uses'/'owns'/'managed-by' (ตามนโยบายคุณ)
-                                          PRIMARY KEY (resource_id, application_id, COALESCE(relation_type,'uses'))
+                                          relation_type  TEXT DEFAULT 'uses',  -- 'uses'/'owns'/'managed-by' (ตามนโยบายคุณ)
+                                          PRIMARY KEY (resource_id, application_id, relation_type)
 );
 
 -- 6) Indexes ที่ควรมี
