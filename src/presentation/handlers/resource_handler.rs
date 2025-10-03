@@ -68,6 +68,7 @@ pub async fn list_resources(
         subscription_id: query.subscription_id,
         resource_group_id: query.resource_group_id,
         search: query.search,
+        tags: query.tags,
     };
 
     let sort = SortParams {

@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TechStock - Resource Management</title>
+    <link rel="stylesheet" href="/css/styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <h1><i class="fas fa-server"></i> TechStock</h1>
+                <p>Azure Resource Management System</p>
+            </div>
+        </header>
+
+        <!-- Navigation Tabs -->
+        <nav class="nav-tabs">
+            <button class="tab-btn active" data-tab="resources">
+                <i class="fas fa-cube"></i> Resources
+            </button>
+            <button class="tab-btn" data-tab="subscriptions">
+                <i class="fas fa-credit-card"></i> Subscriptions
+            </button>
+        </nav>
+
+        <!-- Resources Tab -->
+        <div id="resources-tab" class="tab-content active">
+            <!-- Search and Filter Section -->
+            <div class="search-section">
+                <div class="search-row">
+                    <div class="search-group">
+                        <label>ค้นหา:</label>
+                        <input type="text" id="search-input" placeholder="ค้นหาชื่อ resource...">
+                    </div>
+                    <div class="search-group">
+                        <label>Type:</label>
+                        <select id="type-filter">
+                            <option value="">ทั้งหมด</option>
+                        </select>
+                    </div>
+                    <div class="search-group">
+                        <label>Location:</label>
+                        <select id="location-filter">
+                            <option value="">ทั้งหมด</option>
+                        </select>
+                    </div>
+                    <div class="search-group">
+                        <label>Environment:</label>
+                        <select id="environment-filter">
+                            <option value="">ทั้งหมด</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="search-row">
+                    <div class="search-group">
+                        <label>Tags:</label>
+                        <input type="text" id="tags-search" placeholder="ค้นหาด้วย tags (key:value)">
+                        <small>ตัวอย่าง: Environment:Production, AppName:MyApp</small>
+                    </div>
+                    <div class="search-group">
+                        <button id="search-btn" class="btn btn-primary">
+                            <i class="fas fa-search"></i> ค้นหา
+                        </button>
+                        <button id="clear-btn" class="btn btn-secondary">
+                            <i class="fas fa-times"></i> ล้าง
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="action-section">
+                <button id="add-resource-btn" class="btn btn-success">
+                    <i class="fas fa-plus"></i> เพิ่ม Resource
+                </button>
+                <button id="column-toggle-btn" class="btn btn-info">
+                    <i class="fas fa-columns"></i> จัดการคอลัมน์
+                </button>
+                <div class="pagination-info">
+                    <span id="resource-count">0 รายการ</span>
+                </div>
+            </div>
+
+            <!-- Column Toggle Panel -->
+            <div id="column-panel" class="column-panel" style="display: none;">
+                <h4>เลือกคอลัมน์ที่ต้องการแสดง:</h4>
+                <div class="column-checkboxes">
+                    <label><input type="checkbox" data-column="id" checked> ID</label>
+                    <label><input type="checkbox" data-column="name" checked> Name</label>
+                    <label><input type="checkbox" data-column="type" checked> Type</label>
+                    <label><input type="checkbox" data-column="location" checked> Location</label>
+                    <label><input type="checkbox" data-column="subscription" checked> Subscription</label>
+                    <label><input type="checkbox" data-column="environment" checked> Environment</label>
+                    <label><input type="checkbox" data-column="vendor" checked> Vendor</label>
+                    <label><input type="checkbox" data-column="tags" checked> Tags</label>
+                    <label><input type="checkbox" data-column="created" checked> Created</label>
+                    <label><input type="checkbox" data-column="actions" checked> Actions</label>
+                </div>
+            </div>
+
+            <!-- Resources Table -->
+            <div class="table-container">
+                <table id="resources-table" class="data-table">
+                    <thead>
+                        <tr>
+                            <th data-sort="id" class="sortable">
+                                ID <i class="fas fa-sort"></i>
+                            </th>
+                            <th data-sort="name" class="sortable">
+                                Name <i class="fas fa-sort"></i>
+                            </th>
+                            <th data-sort="resource_type" class="sortable">
+                                Type <i class="fas fa-sort"></i>
+                            </th>
+                            <th data-sort="location" class="sortable">
+                                Location <i class="fas fa-sort"></i>
+                            </th>
+                            <th data-sort="subscription_id" class="sortable">
+                                Subscription <i class="fas fa-sort"></i>
+                            </th>
+                            <th data-sort="environment" class="sortable">
+                                Environment <i class="fas fa-sort"></i>
+                            </th>
+                            <th data-sort="vendor" class="sortable">
+                                Vendor <i class="fas fa-sort"></i>
+                            </th>
+                            <th>Tags</th>
+                            <th data-sort="created_at" class="sortable">
+                                Created <i class="fas fa-sort"></i>
+                            </th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="resources-tbody">
+                        <!-- Data will be loaded here -->
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Pagination -->
+            <div class="pagination-section">
+                <div class="pagination-controls">
+                    <button id="prev-page" class="btn btn-secondary" disabled>
+                        <i class="fas fa-chevron-left"></i> ก่อนหน้า
+                    </button>
+                    <span id="page-info">หน้า 1 จาก 1</span>
+                    <button id="next-page" class="btn btn-secondary" disabled>
+                        ถัดไป <i class="fas fa-chevron-right"></i>
+                    </button>
+                </div>
+                <div class="page-size">
+                    <label>แสดง:</label>
+                    <select id="page-size">
+                        <option value="10">10</option>
+                        <option value="20" selected>20</option>
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                    </select>
+                    <span>รายการต่อหน้า</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Subscriptions Tab -->
+        <div id="subscriptions-tab" class="tab-content">
+            <div class="action-section">
+                <button id="add-subscription-btn" class="btn btn-success">
+                    <i class="fas fa-plus"></i> เพิ่ม Subscription
+                </button>
+            </div>
+
+            <div class="table-container">
+                <table id="subscriptions-table" class="data-table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Name</th>
+                            <th>Tenant ID</th>
+                            <th>Created</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="subscriptions-tbody">
+                        <!-- Data will be loaded here -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal for Add/Edit Resource -->
+    <div id="resource-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modal-title">เพิ่ม Resource</h3>
+                <span class="close">&times;</span>
+            </div>
+            <div class="modal-body">
+                <form id="resource-form">
+                    <input type="hidden" id="resource-id">
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="resource-name">Name *</label>
+                            <input type="text" id="resource-name" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="resource-type">Type *</label>
+                            <input type="text" id="resource-type" required>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="resource-kind">Kind</label>
+                            <input type="text" id="resource-kind">
+                        </div>
+                        <div class="form-group">
+                            <label for="resource-location">Location *</label>
+                            <input type="text" id="resource-location" required>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="subscription-select">Subscription *</label>
+                            <select id="subscription-select" required>
+                                <option value="">เลือก Subscription</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="resource-group-id">Resource Group ID</label>
+                            <input type="number" id="resource-group-id">
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="resource-environment">Environment</label>
+                            <input type="text" id="resource-environment">
+                        </div>
+                        <div class="form-group">
+                            <label for="resource-vendor">Vendor</label>
+                            <input type="text" id="resource-vendor">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="resource-provisioner">Provisioner</label>
+                        <input type="text" id="resource-provisioner">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="resource-tags">Tags (JSON)</label>
+                        <textarea id="resource-tags" rows="4" placeholder='{"key": "value", "Environment": "Production"}'></textarea>
+                        <small>รูปแบบ JSON เช่น {"Environment": "Production", "Owner": "IT"}</small>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" id="cancel-btn">ยกเลิก</button>
+                <button type="submit" form="resource-form" class="btn btn-primary" id="save-btn">บันทึก</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal for Add/Edit Subscription -->
+    <div id="subscription-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="subscription-modal-title">เพิ่ม Subscription</h3>
+                <span class="close">&times;</span>
+            </div>
+            <div class="modal-body">
+                <form id="subscription-form">
+                    <input type="hidden" id="subscription-id">
+                    
+                    <div class="form-group">
+                        <label for="subscription-name">Name *</label>
+                        <input type="text" id="subscription-name" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="subscription-tenant-id">Tenant ID</label>
+                        <input type="text" id="subscription-tenant-id">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" id="subscription-cancel-btn">ยกเลิก</button>
+                <button type="submit" form="subscription-form" class="btn btn-primary" id="subscription-save-btn">บันทึก</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading Spinner -->
+    <div id="loading" class="loading" style="display: none;">
+        <div class="spinner"></div>
+    </div>
+
+    <!-- Toast Notifications -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <script src="/js/app.js"></script>
+</body>
+</html>

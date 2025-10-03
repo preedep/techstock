@@ -110,21 +110,57 @@ impl ResourceRepository for PostgresResourceRepository {
         let size = pagination.size();
         let offset = ((page - 1) * size) as i64;
 
-        // Build WHERE clause
+        // Build WHERE clause dynamically
         let mut where_conditions = Vec::new();
-        let mut bind_values: Vec<Box<dyn sqlx::Encode<'_, sqlx::Postgres> + Send + Sync>> = Vec::new();
-        let mut param_count = 0;
 
         if let Some(resource_type) = &filters.resource_type {
-            param_count += 1;
-            where_conditions.push(format!("type = ${}", param_count));
-            bind_values.push(Box::new(resource_type.clone()));
+            where_conditions.push(format!("type ILIKE '%{}%'", resource_type.replace("'", "''")));
         }
 
         if let Some(location) = &filters.location {
-            param_count += 1;
-            where_conditions.push(format!("location = ${}", param_count));
-            bind_values.push(Box::new(location.clone()));
+            where_conditions.push(format!("location ILIKE '%{}%'", location.replace("'", "''")));
+        }
+
+        if let Some(environment) = &filters.environment {
+            where_conditions.push(format!("environment ILIKE '%{}%'", environment.replace("'", "''")));
+        }
+
+        if let Some(vendor) = &filters.vendor {
+            where_conditions.push(format!("vendor ILIKE '%{}%'", vendor.replace("'", "''")));
+        }
+
+        if let Some(subscription_id) = filters.subscription_id {
+            where_conditions.push(format!("subscription_id = {}", subscription_id));
+        }
+
+        if let Some(resource_group_id) = filters.resource_group_id {
+            where_conditions.push(format!("resource_group_id = {}", resource_group_id));
+        }
+
+        if let Some(search) = &filters.search {
+            let escaped_search = search.replace("'", "''");
+            where_conditions.push(format!("(name ILIKE '%{}%' OR type ILIKE '%{}%')", escaped_search, escaped_search));
+        }
+
+        if let Some(tags_search) = &filters.tags {
+            // Parse tags search (format: "key:value,key2:value2" or "key:value")
+            let tag_conditions: Vec<String> = tags_search
+                .split(',')
+                .filter_map(|tag_pair| {
+                    let parts: Vec<&str> = tag_pair.trim().split(':').collect();
+                    if parts.len() == 2 {
+                        let key = parts[0].trim().replace("'", "''");
+                        let value = parts[1].trim().replace("'", "''");
+                        Some(format!("tags_json ? '{}' AND tags_json->>'{}'::text ILIKE '%{}%'", key, key, value))
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+            
+            if !tag_conditions.is_empty() {
+                where_conditions.push(format!("({})", tag_conditions.join(" OR ")));
+            }
         }
 
         // Build ORDER BY clause

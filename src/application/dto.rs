@@ -112,6 +112,7 @@ pub struct ResourceQueryDto {
     pub subscription_id: Option<i64>,
     pub resource_group_id: Option<i64>,
     pub search: Option<String>,
+    pub tags: Option<String>,
     pub sort_field: Option<String>,
     pub sort_direction: Option<String>,
 }

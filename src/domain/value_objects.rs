@@ -58,6 +58,7 @@ pub struct ResourceFilters {
     pub subscription_id: Option<i64>,
     pub resource_group_id: Option<i64>,
     pub search: Option<String>,
+    pub tags: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

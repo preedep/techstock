@@ -1,5 +1,6 @@
 use actix_web::{web, App};
 use actix_cors::Cors;
+use actix_files::Files;
 use std::sync::Arc;
 
 use crate::{
@@ -59,4 +60,5 @@ pub fn create_app(
                 .allow_any_header()
         )
         .configure(configure_routes)
+        .service(Files::new("/", "./static").index_file("index.html"))
 }
