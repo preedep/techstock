@@ -29,7 +29,8 @@ class TechStockApp {
         this.loadingStates = {
             resources: false,
             subscriptions: false,
-            resourceGroups: false
+            resourceGroups: false,
+            resourceTypes: false
         };
         
         // Debounce timer for filters
@@ -539,6 +540,13 @@ class TechStockApp {
     }
 
     async loadResourceTypes() {
+        if (this.loadingStates.resourceTypes) {
+            console.log('Resource types already loading, skipping...');
+            return;
+        }
+        
+        this.loadingStates.resourceTypes = true;
+        
         try {
             console.log('Loading resource types...');
             const data = await this.apiClient.getResourceTypes();
@@ -554,6 +562,8 @@ class TechStockApp {
         } catch (error) {
             console.error('Failed to load resource types:', error);
             this.showToast('Failed to load resource types', 'error');
+        } finally {
+            this.loadingStates.resourceTypes = false;
         }
     }
 
@@ -645,11 +655,10 @@ class TechStockApp {
                 this.updatePagination(pagination);
                 this.updateResourceCount(pagination.total || this.resources.length);
                 
-                // Only populate filter options if this is the first load or filters changed
-                if (!this.dataCache.lastResourcesQuery || 
-                    JSON.stringify(this.filters) !== this.dataCache.lastResourcesQuery) {
+                // Only populate filter options on first load (not on filter changes)
+                if (!this.dataCache.lastResourcesQuery) {
                     this.populateFilterOptions();
-                    this.dataCache.lastResourcesQuery = JSON.stringify(this.filters);
+                    this.dataCache.lastResourcesQuery = 'initialized';
                 }
             } else {
                 console.error('API error:', data.message);
@@ -679,6 +688,7 @@ class TechStockApp {
             return;
         }
         
+        // Clear table once
         tbody.innerHTML = '';
 
         if (this.resources.length === 0) {
@@ -686,49 +696,52 @@ class TechStockApp {
             return;
         }
 
-        // Process resources in batches to avoid blocking UI
-        const batchSize = 10;
-        for (let i = 0; i < this.resources.length; i += batchSize) {
-            const batch = this.resources.slice(i, i + batchSize);
+        // Create document fragment to avoid multiple DOM updates
+        const fragment = document.createDocumentFragment();
+        
+        // Pre-load all resource group names to avoid multiple async calls
+        const resourceGroupIds = [...new Set(this.resources.map(r => r.resource_group_id).filter(Boolean))];
+        const resourceGroupPromises = resourceGroupIds.map(id => this.getResourceGroupName(id));
+        const resourceGroupNames = await Promise.all(resourceGroupPromises);
+        
+        // Create lookup map
+        const resourceGroupLookup = {};
+        resourceGroupIds.forEach((id, index) => {
+            resourceGroupLookup[id] = resourceGroupNames[index];
+        });
+
+        // Render all rows synchronously now
+        this.resources.forEach(resource => {
+            const row = document.createElement('tr');
+            const resourceGroupName = resourceGroupLookup[resource.resource_group_id] || '';
             
-            // Process batch asynchronously
-            const rows = await Promise.all(batch.map(async (resource) => {
-                const resourceGroupName = await this.getResourceGroupName(resource.resource_group_id);
-                
-                const row = document.createElement('tr');
-                row.innerHTML = `
-                    <td>${resource.id}</td>
-                    <td>${resource.name}</td>
-                    <td>${resource.resource_type || ''}</td>
-                    <td>${resource.location || ''}</td>
-                    <td>${this.getSubscriptionName(resource.subscription_id)}</td>
-                    <td>${resourceGroupName}</td>
-                    <td>${resource.environment || ''}</td>
-                    <td>${resource.vendor || ''}</td>
-                    <td>${this.renderTags(resource.tags_json)}</td>
-                    <td>${this.formatDate(resource.created_at)}</td>
-                    <td>
-                        <div class="action-buttons">
-                            <button class="btn btn-sm btn-warning" onclick="app.editResource(${resource.id})">
-                                <i class="fas fa-edit"></i>
-                            </button>
-                            <button class="btn btn-sm btn-danger" onclick="app.deleteResource(${resource.id})">
-                                <i class="fas fa-trash"></i>
-                            </button>
-                        </div>
-                    </td>
-                `;
-                return row;
-            }));
-            
-            // Append batch to table
-            rows.forEach(row => tbody.appendChild(row));
-            
-            // Allow UI to update between batches
-            if (i + batchSize < this.resources.length) {
-                await new Promise(resolve => setTimeout(resolve, 0));
-            }
-        }
+            row.innerHTML = `
+                <td>${resource.id}</td>
+                <td>${resource.name}</td>
+                <td>${resource.resource_type || ''}</td>
+                <td>${resource.location || ''}</td>
+                <td>${this.getSubscriptionName(resource.subscription_id)}</td>
+                <td>${resourceGroupName}</td>
+                <td>${resource.environment || ''}</td>
+                <td>${resource.vendor || ''}</td>
+                <td>${this.renderTags(resource.tags_json)}</td>
+                <td>${this.formatDate(resource.created_at)}</td>
+                <td>
+                    <div class="action-buttons">
+                        <button class="btn btn-sm btn-warning" onclick="app.editResource(${resource.id})">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <button class="btn btn-sm btn-danger" onclick="app.deleteResource(${resource.id})">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                </td>
+            `;
+            fragment.appendChild(row);
+        });
+        
+        // Single DOM update
+        tbody.appendChild(fragment);
     }
 
     renderSubscriptions() {
@@ -1035,7 +1048,7 @@ class TechStockApp {
         // Set new timer
         this.filterDebounceTimer = setTimeout(() => {
             this.applyFilters();
-        }, 300); // 300ms debounce
+        }, 500); // 500ms debounce to reduce flickering
     }
 
     applyFilters() {

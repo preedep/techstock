@@ -610,6 +610,20 @@ body {
     z-index: 100;
 }
 
+/* Prevent layout shift during loading */
+.table-container {
+    min-height: 400px;
+    position: relative;
+}
+
+#resources-tbody {
+    transition: opacity 0.2s ease;
+}
+
+.loading #resources-tbody {
+    opacity: 0.5;
+}
+
 @keyframes spin {
     0% { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }
