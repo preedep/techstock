@@ -16,9 +16,9 @@ impl Config {
             database_url: env::var("DATABASE_URL")?,
             server_host: env::var("SERVER_HOST").unwrap_or_else(|_| "0.0.0.0".to_string()),
             server_port: env::var("SERVER_PORT")
-                .unwrap_or_else(|_| "3000".to_string())
+                .unwrap_or_else(|_| "8888".to_string())
                 .parse()
-                .unwrap_or(3000),
+                .unwrap_or(8888),
             log_level: env::var("RUST_LOG").unwrap_or_else(|_| "info".to_string()),
             cors_origins: env::var("CORS_ORIGINS")
                 .unwrap_or_else(|_| "*".to_string())
