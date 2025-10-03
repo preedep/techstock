@@ -25,8 +25,26 @@ class TechStockApp {
     }
 
     init() {
+        // Wait for DOM to be ready
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', () => {
+                this.initializeApp();
+            });
+        } else {
+            this.initializeApp();
+        }
+    }
+
+    initializeApp() {
+        console.log('Initializing TechStock App...');
+        
         // Setup loading manager
-        this.loadingManager.setLoadingElement(document.getElementById('loading'));
+        const loadingElement = document.getElementById('loading');
+        if (loadingElement) {
+            this.loadingManager.setLoadingElement(loadingElement);
+        } else {
+            console.warn('Loading element not found');
+        }
         
         this.setupEventListeners();
         this.setupTagsComponents();
@@ -43,74 +61,128 @@ class TechStockApp {
                 'Cache-Control': 'no-cache, no-store, must-revalidate',
                 'Pragma': 'no-cache',
                 'Expires': '0',
-                ...options.headers
+                ...(options.headers || {})
             };
             return originalFetch(url, options);
         };
     }
 
     setupEventListeners() {
+        console.log('Setting up event listeners...');
+        
         // Tab switching
-        document.querySelectorAll('.tab-btn').forEach(btn => {
+        const tabBtns = document.querySelectorAll('.tab-btn');
+        console.log('Found tab buttons:', tabBtns.length);
+        tabBtns.forEach(btn => {
             btn.addEventListener('click', (e) => {
                 this.switchTab(e.target.dataset.tab);
             });
         });
 
         // Search and filter
-        document.getElementById('search-btn').addEventListener('click', () => {
-            this.applyFilters();
-        });
+        const searchBtn = document.getElementById('search-btn');
+        if (searchBtn) {
+            searchBtn.addEventListener('click', () => {
+                this.applyFilters();
+            });
+        } else {
+            console.warn('Search button not found');
+        }
 
-        document.getElementById('clear-btn').addEventListener('click', () => {
-            this.clearFilters();
-        });
+        const clearBtn = document.getElementById('clear-btn');
+        if (clearBtn) {
+            clearBtn.addEventListener('click', () => {
+                this.clearFilters();
+            });
+        } else {
+            console.warn('Clear button not found');
+        }
 
         // Search on Enter key
-        document.getElementById('search-input').addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                this.applyFilters();
-            }
-        });
+        const searchInput = document.getElementById('search-input');
+        if (searchInput) {
+            searchInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    this.applyFilters();
+                }
+            });
+        } else {
+            console.warn('Search input not found');
+        }
 
-        document.getElementById('tags-search').addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                this.applyFilters();
-            }
-        });
+        const tagsSearch = document.getElementById('tags-search');
+        if (tagsSearch) {
+            tagsSearch.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    this.applyFilters();
+                }
+            });
+        } else {
+            console.warn('Tags search not found');
+        }
 
         // Add buttons
-        document.getElementById('add-resource-btn').addEventListener('click', () => {
-            this.openResourceModal();
-        });
+        const addResourceBtn = document.getElementById('add-resource-btn');
+        if (addResourceBtn) {
+            addResourceBtn.addEventListener('click', () => {
+                this.openResourceModal();
+            });
+        } else {
+            console.warn('Add resource button not found');
+        }
 
-        document.getElementById('add-subscription-btn').addEventListener('click', () => {
-            this.openSubscriptionModal();
-        });
+        const addSubscriptionBtn = document.getElementById('add-subscription-btn');
+        if (addSubscriptionBtn) {
+            addSubscriptionBtn.addEventListener('click', () => {
+                this.openSubscriptionModal();
+            });
+        } else {
+            console.warn('Add subscription button not found');
+        }
 
         // Column toggle
-        document.getElementById('column-toggle-btn').addEventListener('click', () => {
-            this.toggleColumnPanel();
-        });
+        const columnToggleBtn = document.getElementById('column-toggle-btn');
+        if (columnToggleBtn) {
+            columnToggleBtn.addEventListener('click', () => {
+                this.toggleColumnPanel();
+            });
+        } else {
+            console.warn('Column toggle button not found');
+        }
 
         // Pagination
-        document.getElementById('prev-page').addEventListener('click', () => {
-            if (this.currentPage > 1) {
-                this.currentPage--;
+        const prevPageBtn = document.getElementById('prev-page');
+        if (prevPageBtn) {
+            prevPageBtn.addEventListener('click', () => {
+                if (this.currentPage > 1) {
+                    this.currentPage--;
+                    this.loadResources();
+                }
+            });
+        } else {
+            console.warn('Previous page button not found');
+        }
+
+        const nextPageBtn = document.getElementById('next-page');
+        if (nextPageBtn) {
+            nextPageBtn.addEventListener('click', () => {
+                this.currentPage++;
                 this.loadResources();
-            }
-        });
+            });
+        } else {
+            console.warn('Next page button not found');
+        }
 
-        document.getElementById('next-page').addEventListener('click', () => {
-            this.currentPage++;
-            this.loadResources();
-        });
-
-        document.getElementById('page-size').addEventListener('change', (e) => {
-            this.pageSize = parseInt(e.target.value);
-            this.currentPage = 1;
-            this.loadResources();
-        });
+        const pageSizeSelect = document.getElementById('page-size');
+        if (pageSizeSelect) {
+            pageSizeSelect.addEventListener('change', (e) => {
+                this.pageSize = parseInt(e.target.value);
+                this.currentPage = 1;
+                this.loadResources();
+            });
+        } else {
+            console.warn('Page size select not found');
+        }
 
         // Modal events
         this.setupModalEvents();
@@ -372,11 +444,29 @@ class TechStockApp {
             console.log('Resources API response:', data);
             
             if (data.success) {
-                this.resources = data.data.items || [];
-                console.log('Loaded resources:', this.resources.length);
+                // Fix: check actual data structure
+                console.log('Full API response structure:', Object.keys(data));
+                
+                if (data.data && Array.isArray(data.data)) {
+                    // Case 1: data.data is array
+                    this.resources = data.data;
+                    console.log('Loaded resources (case 1):', this.resources.length);
+                } else if (data.data && data.data.items) {
+                    // Case 2: data.data.items is array  
+                    this.resources = data.data.items;
+                    console.log('Loaded resources (case 2):', this.resources.length);
+                } else {
+                    // Case 3: fallback
+                    this.resources = [];
+                    console.log('No resources found in response');
+                }
+                
                 this.renderResources();
-                this.updatePagination(data.data.pagination);
-                this.updateResourceCount(data.data.pagination.total);
+                
+                // Handle pagination
+                const pagination = data.pagination || data.data?.pagination || { total: 0 };
+                this.updatePagination(pagination);
+                this.updateResourceCount(pagination.total || this.resources.length);
                 this.populateFilterOptions();
             } else {
                 console.error('API error:', data.message);
@@ -414,7 +504,7 @@ class TechStockApp {
                 <td>${this.getSubscriptionName(resource.subscription_id)}</td>
                 <td>${resource.environment || ''}</td>
                 <td>${resource.vendor || ''}</td>
-                <td>${this.renderTags(resource.tags)}</td>
+                <td>${this.renderTags(resource.tags_json)}</td>
                 <td>${this.formatDate(resource.created_at)}</td>
                 <td>
                     <div class="action-buttons">
@@ -458,19 +548,44 @@ class TechStockApp {
     }
 
     renderTags(tags) {
-        if (!tags || Object.keys(tags).length === 0) {
+        if (!tags) {
+            return '<span class="text-muted">-</span>';
+        }
+
+        // Handle JSON object from database
+        let tagsObj = tags;
+        if (typeof tags === 'string') {
+            try {
+                tagsObj = JSON.parse(tags);
+            } catch (e) {
+                return '<span class="text-muted">-</span>';
+            }
+        }
+
+        if (!tagsObj || Object.keys(tagsObj).length === 0) {
             return '<span class="text-muted">-</span>';
         }
 
         const tagsContainer = document.createElement('div');
         tagsContainer.className = 'tags-container';
 
-        Object.entries(tags).forEach(([key, value]) => {
+        // Show only first 3 tags to avoid clutter
+        const entries = Object.entries(tagsObj).slice(0, 3);
+        entries.forEach(([key, value]) => {
             const tag = document.createElement('span');
             tag.className = 'tag';
             tag.innerHTML = `<span class="tag-key">${key}</span>:<span class="tag-value">${value}</span>`;
             tagsContainer.appendChild(tag);
         });
+
+        // Show count if more tags exist
+        const totalTags = Object.keys(tagsObj).length;
+        if (totalTags > 3) {
+            const moreTag = document.createElement('span');
+            moreTag.className = 'tag tag-more';
+            moreTag.textContent = `+${totalTags - 3} more`;
+            tagsContainer.appendChild(moreTag);
+        }
 
         return tagsContainer.outerHTML;
     }
@@ -508,13 +623,24 @@ class TechStockApp {
     }
 
     populateFilterOptions() {
+        if (!this.resources || this.resources.length === 0) {
+            console.log('No resources to populate filter options');
+            return;
+        }
+
         // Populate filter dropdowns with unique values from current data
         const types = [...new Set(this.resources.map(r => r.resource_type).filter(Boolean))];
         const locations = [...new Set(this.resources.map(r => r.location).filter(Boolean))];
         const environments = [...new Set(this.resources.map(r => r.environment).filter(Boolean))];
         const vendors = [...new Set(this.resources.map(r => r.vendor).filter(Boolean))];
 
-        console.log('Populating filter options:', { types, locations, environments, vendors });
+        console.log('Populating filter options:', { 
+            types: types.length, 
+            locations: locations.length, 
+            environments: environments.length, 
+            vendors: vendors.length 
+        });
+        console.log('Sample resource:', this.resources[0]);
 
         this.populateSelect('type-filter', types);
         this.populateSelect('location-filter', locations);

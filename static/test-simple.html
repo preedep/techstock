@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>Simple Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .test-section { margin: 20px 0; padding: 15px; border: 1px solid #ccc; }
+        .result { background: #f5f5f5; padding: 10px; margin: 10px 0; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; }
+    </style>
+</head>
+<body>
+    <h1>Simple API Test</h1>
+    
+    <div class="test-section">
+        <h2>Resources Test</h2>
+        <button onclick="testResources()">Load Resources</button>
+        <div id="resources-result" class="result"></div>
+        <table id="resources-table" style="display: none;">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Name</th>
+                    <th>Type</th>
+                    <th>Location</th>
+                    <th>Environment</th>
+                    <th>Vendor</th>
+                    <th>Tags</th>
+                </tr>
+            </thead>
+            <tbody id="resources-tbody"></tbody>
+        </table>
+    </div>
+
+    <script>
+        async function testResources() {
+            const result = document.getElementById('resources-result');
+            const table = document.getElementById('resources-table');
+            const tbody = document.getElementById('resources-tbody');
+            
+            try {
+                result.innerHTML = 'Loading...';
+                
+                const response = await fetch('/api/v1/resources?page=1&size=10');
+                const data = await response.json();
+                
+                console.log('API Response:', data);
+                
+                if (data.success) {
+                    const resources = data.data || [];
+                    result.innerHTML = `Loaded ${resources.length} resources`;
+                    
+                    // Clear table
+                    tbody.innerHTML = '';
+                    
+                    // Populate table
+                    resources.forEach(resource => {
+                        const row = document.createElement('tr');
+                        
+                        // Format tags
+                        let tagsText = '-';
+                        if (resource.tags_json) {
+                            try {
+                                const tags = typeof resource.tags_json === 'string' 
+                                    ? JSON.parse(resource.tags_json) 
+                                    : resource.tags_json;
+                                const tagEntries = Object.entries(tags).slice(0, 2);
+                                tagsText = tagEntries.map(([k,v]) => `${k}:${v}`).join(', ');
+                                if (Object.keys(tags).length > 2) {
+                                    tagsText += ` (+${Object.keys(tags).length - 2} more)`;
+                                }
+                            } catch (e) {
+                                tagsText = 'Invalid JSON';
+                            }
+                        }
+                        
+                        row.innerHTML = `
+                            <td>${resource.id}</td>
+                            <td>${resource.name}</td>
+                            <td>${resource.resource_type || ''}</td>
+                            <td>${resource.location || ''}</td>
+                            <td>${resource.environment || ''}</td>
+                            <td>${resource.vendor || ''}</td>
+                            <td>${tagsText}</td>
+                        `;
+                        tbody.appendChild(row);
+                    });
+                    
+                    table.style.display = 'table';
+                } else {
+                    result.innerHTML = `Error: ${data.message}`;
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                result.innerHTML = `Error: ${error.message}`;
+            }
+        }
+    </script>
+</body>
+</html>

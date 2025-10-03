@@ -1,7 +1,16 @@
 // Professional Tags Dropdown Component
 class TagsDropdown {
     constructor(container, options = {}) {
+        console.log('TagsDropdown constructor called with:', container, options);
         this.container = typeof container === 'string' ? document.querySelector(container) : container;
+        
+        if (!this.container) {
+            console.error('TagsDropdown: Container not found!', container);
+            return;
+        }
+        
+        console.log('TagsDropdown: Container found:', this.container);
+        
         this.options = {
             placeholder: 'เลือกหรือเพิ่ม tags...',
             maxTags: 10,
@@ -175,17 +184,20 @@ class TagsDropdown {
                 }
 
                 this.renderCategories();
+                console.log('Tags loaded successfully:', this.availableTags.size, 'categories');
             } else {
                 throw new Error(data.message || 'Failed to load tags');
             }
         } catch (error) {
             console.error('Failed to load tags:', error);
-            this.elements.categories.innerHTML = `
-                <div class="tags-error">
-                    <i class="fas fa-exclamation-triangle"></i>
-                    ไม่สามารถโหลด tags ได้: ${error.message}
-                </div>
-            `;
+            if (this.elements.categories) {
+                this.elements.categories.innerHTML = `
+                    <div class="tags-error">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        ไม่สามารถโหลด tags ได้: ${error.message}
+                    </div>
+                `;
+            }
         }
     }
 
@@ -436,6 +448,59 @@ class TagsDropdown {
         
         this.renderSelectedTags();
         this.renderCategories();
+    }
+
+    renderSelectedTags() {
+        const container = this.elements.selectedTags;
+        if (!container) return;
+        
+        container.innerHTML = '';
+        
+        this.selectedTags.forEach((value, key) => {
+            const tag = document.createElement('span');
+            tag.className = 'selected-tag';
+            tag.innerHTML = `
+                <span class="tag-text">${key}:${value}</span>
+                <button class="tag-remove" data-key="${key}">×</button>
+            `;
+            container.appendChild(tag);
+        });
+    }
+
+    updateSelectedDisplay() {
+        this.renderSelectedTags();
+        
+        // Dispatch change event
+        const event = new CustomEvent('tagschange', {
+            detail: {
+                tags: this.getValue(),
+                tagsString: this.getTagsString()
+            }
+        });
+        this.container.dispatchEvent(event);
+    }
+
+    getValue() {
+        const result = {};
+        this.selectedTags.forEach((value, key) => {
+            result[key] = value;
+        });
+        return result;
+    }
+
+    setValue(tags) {
+        this.selectedTags.clear();
+        if (tags && typeof tags === 'object') {
+            Object.entries(tags).forEach(([key, value]) => {
+                this.selectedTags.set(key, value);
+            });
+            this.updateSelectedDisplay();
+        }
+    }
+
+    clear() {
+        this.selectedTags.clear();
+        this.updateSelectedDisplay();
     }
 }
 
