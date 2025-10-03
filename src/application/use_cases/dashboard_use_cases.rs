@@ -69,8 +69,17 @@ impl DashboardUseCases {
 
         // Get total counts (filtered or unfiltered)
         let total_resources = resource_type_counts.iter().map(|(_, count)| *count as u64).sum();
-        let total_subscriptions = self.subscription_repository.count_all().await? as u64;
-        let total_resource_groups = self.resource_group_repository.count_all().await? as u64;
+        
+        // Calculate filtered totals
+        let (total_subscriptions, total_resource_groups) = if let Some(ref filters) = filters {
+            self.get_filtered_totals(filters).await?
+        } else {
+            (
+                self.subscription_repository.count_all().await? as u64,
+                self.resource_group_repository.count_all().await? as u64,
+            )
+        };
+        
         let total_locations = location_counts.len() as u64;
 
         // Convert to summary format with percentages
@@ -289,5 +298,33 @@ impl DashboardUseCases {
         } else {
             self.resource_repository.count_by_environment().await
         }
+    }
+
+    async fn get_filtered_totals(
+        &self,
+        filters: &DashboardFiltersDto,
+    ) -> DomainResult<(u64, u64)> {
+        let mut total_subscriptions = self.subscription_repository.count_all().await? as u64;
+        let mut total_resource_groups = self.resource_group_repository.count_all().await? as u64;
+
+        // If filtering by specific subscription, total subscriptions should be 1
+        if filters.subscription_id.is_some() {
+            total_subscriptions = 1;
+        }
+
+        // If filtering by specific resource group, total resource groups should be 1
+        if filters.resource_group_id.is_some() {
+            total_resource_groups = 1;
+        }
+
+        // If filtering by subscription but not resource group, count resource groups in that subscription
+        if filters.subscription_id.is_some() && filters.resource_group_id.is_none() {
+            let subscription_id = filters.subscription_id.unwrap();
+            let resource_groups = self.resource_group_repository
+                .find_by_subscription_id(subscription_id).await?;
+            total_resource_groups = resource_groups.len() as u64;
+        }
+
+        Ok((total_subscriptions, total_resource_groups))
     }
 }
