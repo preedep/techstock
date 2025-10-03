@@ -410,4 +410,13 @@ impl ResourceRepository for PostgresResourceRepository {
 
         Ok(rows.into_iter().map(|row| (row.get("env"), row.get("count"))).collect())
     }
+
+    async fn get_distinct_resource_types(&self) -> DomainResult<Vec<String>> {
+        let rows = sqlx::query("SELECT DISTINCT type as resource_type FROM resource WHERE type IS NOT NULL ORDER BY type")
+            .fetch_all(&self.pool)
+            .await
+            .map_err(|e| DomainError::database_error(format!("Failed to get distinct resource types: {}", e)))?;
+
+        Ok(rows.into_iter().map(|row| row.get("resource_type")).collect())
+    }
 }

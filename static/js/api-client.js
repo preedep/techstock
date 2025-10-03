@@ -57,12 +57,13 @@ class ApiClient {
     }
 
     // GET request
-    async get(endpoint, params = {}) {
+    async get(endpoint, params = {}, options = {}) {
         const queryString = new URLSearchParams(params).toString();
         const url = queryString ? `${endpoint}?${queryString}` : endpoint;
         
         return this.request(url, {
-            method: 'GET'
+            method: 'GET',
+            ...options
         });
     }
 
@@ -156,6 +157,24 @@ class ApiClient {
 
     async getTagSuggestions(query) {
         return this.get('/api/v1/tags/suggestions', { q: query });
+    }
+
+    // Resource Groups API
+    async getResourceGroups() {
+        return this.get('/api/v1/resource-groups');
+    }
+
+    async getResourceGroup(id) {
+        return this.get(`/api/v1/resource-groups/${id}`);
+    }
+
+    async getResourceGroupsBySubscription(subscriptionId) {
+        return this.get(`/api/v1/subscriptions/${subscriptionId}/resource-groups`);
+    }
+
+    // Resource Types API
+    async getResourceTypes() {
+        return this.get('/api/v1/resource-types');
     }
 }
 

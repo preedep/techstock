@@ -1,0 +1,216 @@
+/* Searchable Dropdown Component Styles */
+
+.searchable-dropdown {
+    position: relative;
+    width: 100%;
+}
+
+.dropdown-input-container {
+    position: relative;
+    display: flex;
+    align-items: center;
+    border: 1px solid var(--gray-300);
+    border-radius: var(--radius-lg);
+    background: white;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.dropdown-input-container:hover {
+    border-color: var(--gray-400);
+}
+
+.searchable-dropdown.open .dropdown-input-container,
+.dropdown-input-container:focus-within {
+    border-color: var(--primary-500);
+    box-shadow: 0 0 0 3px rgb(59 130 246 / 0.1);
+}
+
+.dropdown-input {
+    flex: 1;
+    padding: 0.75rem 1rem;
+    border: none;
+    background: transparent;
+    font-size: 0.875rem;
+    cursor: pointer;
+    outline: none;
+}
+
+.dropdown-input:disabled {
+    cursor: not-allowed;
+    color: var(--gray-400);
+}
+
+.dropdown-icons {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding-right: 1rem;
+}
+
+.dropdown-icons i {
+    color: var(--gray-400);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-size: 0.875rem;
+}
+
+.dropdown-icons i:hover {
+    color: var(--gray-600);
+}
+
+.toggle-icon {
+    transition: transform 0.2s ease;
+}
+
+.clear-icon:hover {
+    color: var(--error-500);
+}
+
+.dropdown-menu {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    z-index: 1000;
+    background: white;
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+    margin-top: 0.25rem;
+    max-height: 300px;
+    overflow: hidden;
+}
+
+.dropdown-search {
+    padding: 0.75rem;
+    border-bottom: 1px solid var(--gray-200);
+}
+
+.search-input {
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--gray-300);
+    border-radius: var(--radius-md);
+    font-size: 0.875rem;
+    outline: none;
+    transition: all 0.2s ease;
+}
+
+.search-input:focus {
+    border-color: var(--primary-500);
+    box-shadow: 0 0 0 2px rgb(59 130 246 / 0.1);
+}
+
+.dropdown-items {
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.dropdown-item {
+    padding: 0.75rem;
+    cursor: pointer;
+    border-bottom: 1px solid var(--gray-100);
+    transition: all 0.2s ease;
+}
+
+.dropdown-item:last-child {
+    border-bottom: none;
+}
+
+.dropdown-item:hover {
+    background: var(--gray-50);
+}
+
+.dropdown-item.selected {
+    background: var(--primary-50);
+    color: var(--primary-700);
+}
+
+.item-content {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.item-name {
+    font-weight: 500;
+    font-size: 0.875rem;
+}
+
+.item-description {
+    font-size: 0.75rem;
+    color: var(--gray-500);
+}
+
+.dropdown-empty {
+    padding: 2rem;
+    text-align: center;
+    color: var(--gray-500);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.dropdown-empty i {
+    font-size: 1.5rem;
+    opacity: 0.5;
+}
+
+/* Disabled State */
+.searchable-dropdown.disabled {
+    opacity: 0.6;
+    pointer-events: none;
+}
+
+.searchable-dropdown.disabled .dropdown-input-container {
+    background: var(--gray-100);
+    border-color: var(--gray-200);
+    cursor: not-allowed;
+}
+
+/* Scrollbar Styling */
+.dropdown-items::-webkit-scrollbar {
+    width: 6px;
+}
+
+.dropdown-items::-webkit-scrollbar-track {
+    background: var(--gray-100);
+}
+
+.dropdown-items::-webkit-scrollbar-thumb {
+    background: var(--gray-300);
+    border-radius: 3px;
+}
+
+.dropdown-items::-webkit-scrollbar-thumb:hover {
+    background: var(--gray-400);
+}
+
+/* Animation */
+.dropdown-menu {
+    animation: dropdownSlideIn 0.2s ease;
+}
+
+@keyframes dropdownSlideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .dropdown-menu {
+        max-height: 250px;
+    }
+    
+    .dropdown-items {
+        max-height: 150px;
+    }
+}

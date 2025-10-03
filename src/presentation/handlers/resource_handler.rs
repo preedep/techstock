@@ -145,3 +145,14 @@ pub async fn get_resources_by_subscription(
         .await?;
     Ok(HttpResponse::Ok().json(ApiResponse::success(resources)))
 }
+
+pub async fn get_resource_types(
+    services: web::Data<Arc<AppServices>>,
+) -> AppResult<HttpResponse> {
+    let types = services.resource_use_cases.get_distinct_resource_types().await?;
+    Ok(HttpResponse::Ok().json(serde_json::json!({
+        "success": true,
+        "data": types,
+        "message": null
+    })))
+}

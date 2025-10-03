@@ -23,4 +23,5 @@ pub trait ResourceRepository: Send + Sync {
     async fn count_by_type(&self) -> DomainResult<Vec<(String, i64)>>;
     async fn count_by_location(&self) -> DomainResult<Vec<(String, i64)>>;
     async fn count_by_environment(&self) -> DomainResult<Vec<(String, i64)>>;
+    async fn get_distinct_resource_types(&self) -> DomainResult<Vec<String>>;
 }

@@ -133,6 +133,10 @@ impl ResourceUseCases {
         let (resources, _) = self.repository.find_all(pagination, filters, sort).await?;
         Ok(resources)
     }
+
+    pub async fn get_distinct_resource_types(&self) -> DomainResult<Vec<String>> {
+        self.repository.get_distinct_resource_types().await
+    }
 }
 
 #[derive(Debug, serde::Serialize)]

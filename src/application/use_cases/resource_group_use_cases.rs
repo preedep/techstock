@@ -56,6 +56,16 @@ impl ResourceGroupUseCases {
         self.repository.find_all(pagination).await
     }
 
+    pub async fn list_all(&self) -> DomainResult<Vec<ResourceGroup>> {
+        // Get all resource groups without pagination
+        let pagination = PaginationParams {
+            page: Some(1),
+            size: Some(10000), // Large number to get all
+        };
+        let (resource_groups, _) = self.repository.find_all(pagination).await?;
+        Ok(resource_groups)
+    }
+
     pub async fn update_resource_group(&self, id: i64, request: UpdateResourceGroupRequest) -> DomainResult<ResourceGroup> {
         // Check if resource group exists
         let existing = match self.repository.find_by_id(id).await? {
