@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TechStock - Resource Management</title>
     <link rel="stylesheet" href="/css/styles.css">
+    <link rel="stylesheet" href="/css/tags-component.css">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
 </head>
 <body>
@@ -56,11 +57,13 @@
                     </div>
                 </div>
                 <div class="search-row">
-                    <div class="search-group">
+                    <div class="search-group tags-search-group">
                         <label>Tags:</label>
-                        <input type="text" id="tags-search" placeholder="ค้นหาด้วย tags (key:value)">
-                        <small>ตัวอย่าง: Environment:Production, AppName:MyApp</small>
+                        <div id="tags-dropdown-container"></div>
+                        <small>เลือกจาก dropdown หรือเพิ่ม tags ใหม่</small>
                     </div>
+                </div>
+                <div class="search-row">
                     <div class="search-group">
                         <button id="search-btn" class="btn btn-primary">
                             <i class="fas fa-search"></i> ค้นหา
@@ -255,9 +258,9 @@
                     </div>
 
                     <div class="form-group">
-                        <label for="resource-tags">Tags (JSON)</label>
-                        <textarea id="resource-tags" rows="4" placeholder='{"key": "value", "Environment": "Production"}'></textarea>
-                        <small>รูปแบบ JSON เช่น {"Environment": "Production", "Owner": "IT"}</small>
+                        <label for="resource-tags">Tags</label>
+                        <div id="modal-tags-dropdown-container"></div>
+                        <small>เลือก tags ที่ต้องการหรือเพิ่มใหม่</small>
                     </div>
                 </form>
             </div>
@@ -305,6 +308,9 @@
     <!-- Toast Notifications -->
     <div id="toast-container" class="toast-container"></div>
 
+    <script src="/js/api-client.js"></script>
+    <script src="/js/tags-component.js"></script>
+    <script src="/js/connection-test.js"></script>
     <script src="/js/app.js"></script>
 </body>
 </html>

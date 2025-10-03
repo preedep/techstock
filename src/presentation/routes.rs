@@ -35,6 +35,13 @@ pub fn configure_routes(cfg: &mut web::ServiceConfig) {
                 .route("/{id}", web::put().to(update_subscription))
                 .route("/{id}", web::delete().to(delete_subscription))
                 .route("/{id}/resources", web::get().to(get_resources_by_subscription))
+        )
+        
+        // Tags endpoints
+        .service(
+            web::scope("/api/v1/tags")
+                .route("", web::get().to(get_available_tags))
+                .route("/suggestions", web::get().to(get_tag_suggestions))
         );
 }
 

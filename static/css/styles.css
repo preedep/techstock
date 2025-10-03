@@ -139,6 +139,15 @@ body {
     font-size: 0.8rem;
 }
 
+.tags-search-group {
+    min-width: 100%;
+    flex: 1 1 100%;
+}
+
+.tags-search-group .tags-dropdown {
+    width: 100%;
+}
+
 /* Action Section */
 .action-section {
     display: flex;

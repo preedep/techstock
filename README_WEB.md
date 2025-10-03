@@ -46,7 +46,7 @@ TechStock Web Application เป็นระบบจัดการ Azure Resou
 
 2. **เปิดเว็บเบราว์เซอร์**:
    ```
-   http://localhost:3000
+   http://localhost:8888
    ```
 
 ### การค้นหาด้วย Tags

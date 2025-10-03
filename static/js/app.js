@@ -10,11 +10,23 @@ class TechStockApp {
         this.resources = [];
         this.currentTab = 'resources';
         
+        // Initialize API client with loading management
+        this.loadingManager = new LoadingManager();
+        this.apiClient = new RetryableApiClient('', this.loadingManager, 3);
+        
+        // Initialize Tags Components
+        this.searchTagsDropdown = null;
+        this.modalTagsDropdown = null;
+        
         this.init();
     }
 
     init() {
+        // Setup loading manager
+        this.loadingManager.setLoadingElement(document.getElementById('loading'));
+        
         this.setupEventListeners();
+        this.setupTagsComponents();
         this.loadSubscriptions();
         this.loadResources();
         this.setupColumnToggle();
@@ -91,6 +103,33 @@ class TechStockApp {
 
         // Column visibility
         this.setupColumnVisibility();
+    }
+
+    setupTagsComponents() {
+        // Initialize search tags dropdown
+        const searchContainer = document.getElementById('tags-dropdown-container');
+        if (searchContainer) {
+            this.searchTagsDropdown = new TagsDropdown(searchContainer, {
+                placeholder: 'ค้นหาด้วย tags...',
+                maxTags: 5,
+                allowCustom: true
+            });
+
+            // Listen for changes
+            searchContainer.addEventListener('tagschange', (e) => {
+                this.filters.tags = this.searchTagsDropdown.getTagsString();
+            });
+        }
+
+        // Initialize modal tags dropdown
+        const modalContainer = document.getElementById('modal-tags-dropdown-container');
+        if (modalContainer) {
+            this.modalTagsDropdown = new TagsDropdown(modalContainer, {
+                placeholder: 'เลือก tags สำหรับ resource...',
+                maxTags: 15,
+                allowCustom: true
+            });
+        }
     }
 
     setupModalEvents() {
@@ -256,61 +295,55 @@ class TechStockApp {
 
     async loadSubscriptions() {
         try {
-            this.showLoading();
-            const response = await fetch('/api/v1/subscriptions');
-            const data = await response.json();
+            const data = await this.apiClient.getSubscriptions();
             
             if (data.success) {
                 this.subscriptions = data.data.items || data.data;
                 this.renderSubscriptions();
                 this.populateSubscriptionSelect();
             } else {
-                this.showToast('Error loading subscriptions: ' + data.message, 'error');
+                this.showToast('Error loading subscriptions: ' + (data.message || 'Unknown error'), 'error');
             }
         } catch (error) {
-            this.showToast('Error loading subscriptions: ' + error.message, 'error');
-        } finally {
-            this.hideLoading();
+            console.error('Failed to load subscriptions:', error);
+            this.showToast(error.getUserMessage(), 'error');
         }
     }
 
     async loadResources() {
         try {
-            this.showLoading();
-            
-            const params = new URLSearchParams({
+            const params = {
                 page: this.currentPage,
                 size: this.pageSize
-            });
+            };
 
             // Add filters
             if (this.filters.search) {
-                params.append('search', this.filters.search);
+                params.search = this.filters.search;
             }
             if (this.filters.resource_type) {
-                params.append('resource_type', this.filters.resource_type);
+                params.resource_type = this.filters.resource_type;
             }
             if (this.filters.location) {
-                params.append('location', this.filters.location);
+                params.location = this.filters.location;
             }
             if (this.filters.environment) {
-                params.append('environment', this.filters.environment);
+                params.environment = this.filters.environment;
             }
             if (this.filters.vendor) {
-                params.append('vendor', this.filters.vendor);
+                params.vendor = this.filters.vendor;
             }
             if (this.filters.tags) {
-                params.append('tags', this.filters.tags);
+                params.tags = this.filters.tags;
             }
 
             // Add sorting
             if (this.sortField) {
-                params.append('sort_field', this.sortField);
-                params.append('sort_direction', this.sortDirection);
+                params.sort_field = this.sortField;
+                params.sort_direction = this.sortDirection;
             }
 
-            const response = await fetch(`/api/v1/resources?${params}`);
-            const data = await response.json();
+            const data = await this.apiClient.getResources(params);
             
             if (data.success) {
                 this.resources = data.data.items;
@@ -319,12 +352,11 @@ class TechStockApp {
                 this.updateResourceCount(data.data.pagination.total);
                 this.populateFilterOptions();
             } else {
-                this.showToast('Error loading resources: ' + data.message, 'error');
+                this.showToast('Error loading resources: ' + (data.message || 'Unknown error'), 'error');
             }
         } catch (error) {
-            this.showToast('Error loading resources: ' + error.message, 'error');
-        } finally {
-            this.hideLoading();
+            console.error('Failed to load resources:', error);
+            this.showToast(error.getUserMessage(), 'error');
         }
     }
 
@@ -498,11 +530,15 @@ class TechStockApp {
 
     clearFilters() {
         document.getElementById('search-input').value = '';
-        document.getElementById('tags-search').value = '';
         document.getElementById('type-filter').value = '';
         document.getElementById('location-filter').value = '';
         document.getElementById('environment-filter').value = '';
         document.getElementById('vendor-filter').value = '';
+
+        // Clear tags dropdown
+        if (this.searchTagsDropdown) {
+            this.searchTagsDropdown.clear();
+        }
 
         this.filters = {};
         this.currentPage = 1;
@@ -555,8 +591,9 @@ class TechStockApp {
         document.getElementById('resource-vendor').value = resource.vendor || '';
         document.getElementById('resource-provisioner').value = resource.provisioner || '';
         
-        if (resource.tags) {
-            document.getElementById('resource-tags').value = JSON.stringify(resource.tags, null, 2);
+        // Set tags using dropdown component
+        if (this.modalTagsDropdown && resource.tags) {
+            this.modalTagsDropdown.setValue(resource.tags);
         }
     }
 
@@ -571,38 +608,25 @@ class TechStockApp {
             const formData = this.getResourceFormData();
             const resourceId = document.getElementById('resource-id').value;
             
-            let response;
+            let data;
             if (resourceId) {
                 // Update
-                response = await fetch(`/api/v1/resources/${resourceId}`, {
-                    method: 'PUT',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify(formData)
-                });
+                data = await this.apiClient.updateResource(resourceId, formData);
             } else {
                 // Create
-                response = await fetch('/api/v1/resources', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify(formData)
-                });
+                data = await this.apiClient.createResource(formData);
             }
-
-            const data = await response.json();
             
             if (data.success) {
                 this.showToast(data.message || 'Resource saved successfully', 'success');
                 document.getElementById('resource-modal').style.display = 'none';
                 this.loadResources();
             } else {
-                this.showToast('Error saving resource: ' + data.message, 'error');
+                this.showToast('Error saving resource: ' + (data.message || 'Unknown error'), 'error');
             }
         } catch (error) {
-            this.showToast('Error saving resource: ' + error.message, 'error');
+            console.error('Failed to save resource:', error);
+            this.showToast(error.getUserMessage(), 'error');
         }
     }
 
@@ -611,28 +635,14 @@ class TechStockApp {
             const formData = this.getSubscriptionFormData();
             const subscriptionId = document.getElementById('subscription-id').value;
             
-            let response;
+            let data;
             if (subscriptionId) {
                 // Update
-                response = await fetch(`/api/v1/subscriptions/${subscriptionId}`, {
-                    method: 'PUT',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify(formData)
-                });
+                data = await this.apiClient.updateSubscription(subscriptionId, formData);
             } else {
                 // Create
-                response = await fetch('/api/v1/subscriptions', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify(formData)
-                });
+                data = await this.apiClient.createSubscription(formData);
             }
-
-            const data = await response.json();
             
             if (data.success) {
                 this.showToast(data.message || 'Subscription saved successfully', 'success');
@@ -640,22 +650,21 @@ class TechStockApp {
                 this.loadSubscriptions();
                 this.populateSubscriptionSelect();
             } else {
-                this.showToast('Error saving subscription: ' + data.message, 'error');
+                this.showToast('Error saving subscription: ' + (data.message || 'Unknown error'), 'error');
             }
         } catch (error) {
-            this.showToast('Error saving subscription: ' + error.message, 'error');
+            console.error('Failed to save subscription:', error);
+            this.showToast(error.getUserMessage(), 'error');
         }
     }
 
     getResourceFormData() {
-        const tags = document.getElementById('resource-tags').value.trim();
-        let parsedTags = null;
-        
-        if (tags) {
-            try {
-                parsedTags = JSON.parse(tags);
-            } catch (e) {
-                throw new Error('Invalid JSON format for tags');
+        // Get tags from dropdown component
+        let tags = null;
+        if (this.modalTagsDropdown) {
+            const tagsValue = this.modalTagsDropdown.getValue();
+            if (Object.keys(tagsValue).length > 0) {
+                tags = tagsValue;
             }
         }
 
@@ -670,7 +679,7 @@ class TechStockApp {
             environment: document.getElementById('resource-environment').value || null,
             vendor: document.getElementById('resource-vendor').value || null,
             provisioner: document.getElementById('resource-provisioner').value || null,
-            tags: parsedTags
+            tags: tags
         };
     }
 
@@ -701,19 +710,12 @@ class TechStockApp {
         }
 
         try {
-            const response = await fetch(`/api/v1/resources/${id}`, {
-                method: 'DELETE'
-            });
-
-            if (response.ok) {
-                this.showToast('Resource deleted successfully', 'success');
-                this.loadResources();
-            } else {
-                const data = await response.json();
-                this.showToast('Error deleting resource: ' + data.message, 'error');
-            }
+            const data = await this.apiClient.deleteResource(id);
+            this.showToast('Resource deleted successfully', 'success');
+            this.loadResources();
         } catch (error) {
-            this.showToast('Error deleting resource: ' + error.message, 'error');
+            console.error('Failed to delete resource:', error);
+            this.showToast(error.getUserMessage(), 'error');
         }
     }
 
@@ -723,30 +725,16 @@ class TechStockApp {
         }
 
         try {
-            const response = await fetch(`/api/v1/subscriptions/${id}`, {
-                method: 'DELETE'
-            });
-
-            if (response.ok) {
-                this.showToast('Subscription deleted successfully', 'success');
-                this.loadSubscriptions();
-                this.populateSubscriptionSelect();
-            } else {
-                const data = await response.json();
-                this.showToast('Error deleting subscription: ' + data.message, 'error');
-            }
+            const data = await this.apiClient.deleteSubscription(id);
+            this.showToast('Subscription deleted successfully', 'success');
+            this.loadSubscriptions();
+            this.populateSubscriptionSelect();
         } catch (error) {
-            this.showToast('Error deleting subscription: ' + error.message, 'error');
+            console.error('Failed to delete subscription:', error);
+            this.showToast(error.getUserMessage(), 'error');
         }
     }
 
-    showLoading() {
-        document.getElementById('loading').style.display = 'flex';
-    }
-
-    hideLoading() {
-        document.getElementById('loading').style.display = 'none';
-    }
 
     showToast(message, type = 'info') {
         const container = document.getElementById('toast-container');

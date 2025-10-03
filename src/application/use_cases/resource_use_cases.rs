@@ -108,6 +108,31 @@ impl ResourceUseCases {
             by_environment: environment_counts,
         })
     }
+
+    pub async fn list_all_resources(&self) -> DomainResult<Vec<Resource>> {
+        // Get all resources without pagination for tags analysis
+        let pagination = PaginationParams {
+            page: Some(1),
+            size: Some(10000), // Large number to get all
+        };
+        let filters = ResourceFilters {
+            resource_type: None,
+            location: None,
+            environment: None,
+            vendor: None,
+            subscription_id: None,
+            resource_group_id: None,
+            search: None,
+            tags: None,
+        };
+        let sort = SortParams {
+            field: None,
+            direction: None,
+        };
+        
+        let (resources, _) = self.repository.find_all(pagination, filters, sort).await?;
+        Ok(resources)
+    }
 }
 
 #[derive(Debug, serde::Serialize)]
