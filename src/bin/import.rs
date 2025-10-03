@@ -45,13 +45,17 @@ async fn main() -> Result<()> {
         .unwrap_or_else(|_| "postgresql://localhost/techstock".to_string());
     
     log::info!("Connecting to database: {}", database_url);
+    log::debug!("Environment variables loaded from .env file");
     
     // Connect to database
+    log::debug!("Attempting database connection...");
     let pool = PgPool::connect(&database_url).await?;
+    log::info!("Database connection established successfully");
     
     // Run migrations/create tables if needed
     log::info!("Setting up database tables...");
     setup_database(&pool).await?;
+    log::debug!("Database setup completed");
     
     // Import CSV data
     let csv_path = "datasets/AzureResourceGraphFormattedResults-Query.csv";
@@ -66,13 +70,22 @@ async fn main() -> Result<()> {
 
 async fn setup_database(pool: &PgPool) -> Result<()> {
     // Read and execute the SQL schema
+    log::debug!("Reading SQL schema from sql/create_tables.sql");
     let sql_content = tokio::fs::read_to_string("sql/create_tables.sql").await?;
+    log::debug!("SQL schema file loaded, {} bytes", sql_content.len());
     
     // Split by semicolon and execute each statement
-    for statement in sql_content.split(';') {
+    let statements: Vec<&str> = sql_content.split(';').collect();
+    log::debug!("Executing {} SQL statements", statements.len());
+    
+    for (i, statement) in statements.iter().enumerate() {
         let statement = statement.trim();
         if !statement.is_empty() && !statement.starts_with("--") {
-            sqlx::query(statement).execute(pool).await.ok(); // Ignore errors for existing tables
+            log::debug!("Executing SQL statement {}: {}", i + 1, statement.chars().take(50).collect::<String>());
+            match sqlx::query(statement).execute(pool).await {
+                Ok(_) => log::debug!("SQL statement {} executed successfully", i + 1),
+                Err(e) => log::debug!("SQL statement {} failed (ignoring): {}", i + 1, e),
+            }
         }
     }
     
@@ -80,17 +93,22 @@ async fn setup_database(pool: &PgPool) -> Result<()> {
 }
 
 async fn import_csv_data(pool: &PgPool, csv_path: &str) -> Result<()> {
+    log::debug!("Checking if CSV file exists: {}", csv_path);
     if !Path::new(csv_path).exists() {
+        log::error!("CSV file not found: {}", csv_path);
         return Err(anyhow::anyhow!("CSV file not found: {}", csv_path));
     }
+    log::debug!("CSV file found, initializing reader");
     
     let mut reader = ReaderBuilder::new()
         .has_headers(true)
         .from_path(csv_path)?;
+    log::debug!("CSV reader initialized successfully");
     
     let mut subscription_cache: HashMap<String, i64> = HashMap::new();
     let mut resource_group_cache: HashMap<(String, i64), i64> = HashMap::new();
     let mut application_cache: HashMap<String, i64> = HashMap::new();
+    log::debug!("Initialized caches for subscriptions, resource groups, and applications");
     
     let mut record_count = 0;
     
@@ -100,39 +118,56 @@ async fn import_csv_data(pool: &PgPool, csv_path: &str) -> Result<()> {
         
         if record_count % 100 == 0 {
             log::info!("Processed {} records", record_count);
+            log::debug!("Cache stats - Subscriptions: {}, Resource Groups: {}, Applications: {}", 
+                subscription_cache.len(), resource_group_cache.len(), application_cache.len());
+        }
+        
+        if record_count % 10 == 0 {
+            log::debug!("Processing record {}: {} ({})", record_count, record.name, record.resource_type);
         }
         
         // Parse tags
+        log::debug!("Parsing tags for resource: {}", record.name);
         let parsed_tags = parse_tags(&record.tags)?;
+        log::debug!("Parsed {} tags for resource: {}", parsed_tags.tags.len(), record.name);
         
         // Get or create subscription
+        log::debug!("Getting/creating subscription: {}", record.subscription);
         let subscription_id = get_or_create_subscription(
             pool, 
             &record.subscription, 
             &mut subscription_cache
         ).await?;
+        log::debug!("Subscription ID: {}", subscription_id);
         
         // Get or create resource group
+        log::debug!("Getting/creating resource group: {}", record.resource_group);
         let resource_group_id = get_or_create_resource_group(
             pool,
             &record.resource_group,
             subscription_id,
             &mut resource_group_cache,
         ).await?;
+        log::debug!("Resource group ID: {}", resource_group_id);
         
         // Get or create application if AppID exists
         let application_id = if let Some(app_id) = parsed_tags.tags.get("AppID") {
-            Some(get_or_create_application(
+            log::debug!("Getting/creating application: {}", app_id);
+            let app_id_result = get_or_create_application(
                 pool,
                 app_id,
                 &parsed_tags,
                 &mut application_cache,
-            ).await?)
+            ).await?;
+            log::debug!("Application ID: {}", app_id_result);
+            Some(app_id_result)
         } else {
+            log::debug!("No AppID found in tags for resource: {}", record.name);
             None
         };
         
         // Insert resource
+        log::debug!("Inserting resource: {}", record.name);
         let resource_id = insert_resource(
             pool,
             &record,
@@ -140,13 +175,18 @@ async fn import_csv_data(pool: &PgPool, csv_path: &str) -> Result<()> {
             subscription_id,
             resource_group_id,
         ).await?;
+        log::debug!("Resource inserted with ID: {}", resource_id);
         
         // Insert resource tags
+        log::debug!("Inserting {} tags for resource ID: {}", parsed_tags.tags.len(), resource_id);
         insert_resource_tags(pool, resource_id, &parsed_tags).await?;
+        log::debug!("Tags inserted successfully for resource ID: {}", resource_id);
         
         // Link resource to application if exists
         if let Some(app_id) = application_id {
+            log::debug!("Linking resource {} to application {}", resource_id, app_id);
             link_resource_to_application(pool, resource_id, app_id).await?;
+            log::debug!("Resource-application link created successfully");
         }
     }
     
@@ -155,10 +195,21 @@ async fn import_csv_data(pool: &PgPool, csv_path: &str) -> Result<()> {
 }
 
 fn parse_tags(tags_str: &str) -> Result<ParsedTags> {
+    log::debug!("Parsing tags string: {}", tags_str.chars().take(100).collect::<String>());
     let tags_json: Value = if tags_str == "null" || tags_str.is_empty() {
+        log::debug!("Empty or null tags, using empty object");
         serde_json::json!({})
     } else {
-        serde_json::from_str(tags_str)?
+        match serde_json::from_str(tags_str) {
+            Ok(json) => {
+                log::debug!("Successfully parsed tags JSON");
+                json
+            }
+            Err(e) => {
+                log::warn!("Failed to parse tags JSON: {}, using empty object", e);
+                serde_json::json!({})
+            }
+        }
     };
     
     let mut tags = HashMap::new();
@@ -185,8 +236,10 @@ async fn get_or_create_subscription(
     cache: &mut HashMap<String, i64>,
 ) -> Result<i64> {
     if let Some(&id) = cache.get(name) {
+        log::debug!("Found subscription '{}' in cache with ID: {}", name, id);
         return Ok(id);
     }
+    log::debug!("Subscription '{}' not in cache, checking database", name);
     
     // Try to find existing subscription
     if let Ok(row) = sqlx::query("SELECT id FROM subscription WHERE name = $1")
@@ -195,9 +248,11 @@ async fn get_or_create_subscription(
         .await
     {
         let id: i64 = row.get("id");
+        log::debug!("Found existing subscription '{}' with ID: {}", name, id);
         cache.insert(name.to_string(), id);
         return Ok(id);
     }
+    log::debug!("Subscription '{}' not found, creating new one", name);
     
     // Create new subscription
     let row = sqlx::query("INSERT INTO subscription (name) VALUES ($1) RETURNING id")
@@ -206,6 +261,7 @@ async fn get_or_create_subscription(
         .await?;
     
     let id: i64 = row.get("id");
+    log::info!("Created new subscription '{}' with ID: {}", name, id);
     cache.insert(name.to_string(), id);
     Ok(id)
 }
@@ -219,8 +275,10 @@ async fn get_or_create_resource_group(
     let key = (name.to_string(), subscription_id);
     
     if let Some(&id) = cache.get(&key) {
+        log::debug!("Found resource group '{}' in cache with ID: {}", name, id);
         return Ok(id);
     }
+    log::debug!("Resource group '{}' not in cache, checking database", name);
     
     // Try to find existing resource group
     if let Ok(row) = sqlx::query(
@@ -232,9 +290,11 @@ async fn get_or_create_resource_group(
     .await
     {
         let id: i64 = row.get("id");
+        log::debug!("Found existing resource group '{}' with ID: {}", name, id);
         cache.insert(key, id);
         return Ok(id);
     }
+    log::debug!("Resource group '{}' not found, creating new one", name);
     
     // Create new resource group
     let row = sqlx::query(
@@ -246,6 +306,7 @@ async fn get_or_create_resource_group(
     .await?;
     
     let id: i64 = row.get("id");
+    log::info!("Created new resource group '{}' with ID: {}", name, id);
     cache.insert(key, id);
     Ok(id)
 }
@@ -257,8 +318,10 @@ async fn get_or_create_application(
     cache: &mut HashMap<String, i64>,
 ) -> Result<i64> {
     if let Some(&id) = cache.get(app_id) {
+        log::debug!("Found application '{}' in cache with ID: {}", app_id, id);
         return Ok(id);
     }
+    log::debug!("Application '{}' not in cache, checking database", app_id);
     
     // Try to find existing application
     if let Ok(row) = sqlx::query("SELECT id FROM application WHERE code = $1")
@@ -267,25 +330,31 @@ async fn get_or_create_application(
         .await
     {
         let id: i64 = row.get("id");
+        log::debug!("Found existing application '{}' with ID: {}", app_id, id);
         cache.insert(app_id.to_string(), id);
         return Ok(id);
     }
+    log::debug!("Application '{}' not found, creating new one", app_id);
     
     // Create new application
     let owner_email = parsed_tags.tags.get("AdminName")
         .or(parsed_tags.tags.get("AdminName1"))
         .or(parsed_tags.tags.get("AdminName2"));
     
+    let app_name = parsed_tags.tags.get("AppName");
+    log::debug!("Creating application - Code: {}, Name: {:?}, Owner: {:?}", app_id, app_name, owner_email);
+    
     let row = sqlx::query(
         "INSERT INTO application (code, name, owner_email) VALUES ($1, $2, $3) RETURNING id"
     )
     .bind(app_id)
-    .bind(parsed_tags.tags.get("AppName"))
+    .bind(app_name)
     .bind(owner_email)
     .fetch_one(pool)
     .await?;
     
     let id: i64 = row.get("id");
+    log::info!("Created new application '{}' with ID: {}", app_id, id);
     cache.insert(app_id.to_string(), id);
     Ok(id)
 }
@@ -297,6 +366,9 @@ async fn insert_resource(
     subscription_id: i64,
     resource_group_id: i64,
 ) -> Result<i64> {
+    log::debug!("Preparing to insert resource: {} (type: {}, location: {})", 
+        record.name, record.resource_type, record.location);
+    
     let extended_location = if record.extended_location.as_deref() == Some("null") {
         None
     } else {
@@ -308,6 +380,13 @@ async fn insert_resource(
     } else {
         record.kind.as_deref()
     };
+    
+    let vendor = parsed_tags.tags.get("Vendor");
+    let environment = parsed_tags.tags.get("Environment");
+    let provisioner = parsed_tags.tags.get("Provisioner");
+    
+    log::debug!("Resource metadata - Vendor: {:?}, Environment: {:?}, Provisioner: {:?}", 
+        vendor, environment, provisioner);
     
     let row = sqlx::query(
         r#"
@@ -326,13 +405,15 @@ async fn insert_resource(
     .bind(resource_group_id)
     .bind(&parsed_tags.tags_json)
     .bind(extended_location)
-    .bind(parsed_tags.tags.get("Vendor"))
-    .bind(parsed_tags.tags.get("Environment"))
-    .bind(parsed_tags.tags.get("Provisioner"))
+    .bind(vendor)
+    .bind(environment)
+    .bind(provisioner)
     .fetch_one(pool)
     .await?;
     
-    Ok(row.get("id"))
+    let resource_id = row.get("id");
+    log::debug!("Resource '{}' inserted successfully with ID: {}", record.name, resource_id);
+    Ok(resource_id)
 }
 
 async fn insert_resource_tags(
@@ -340,8 +421,10 @@ async fn insert_resource_tags(
     resource_id: i64,
     parsed_tags: &ParsedTags,
 ) -> Result<()> {
+    let mut tag_count = 0;
     for (key, value) in &parsed_tags.tags {
-        sqlx::query(
+        log::debug!("Inserting tag for resource {}: {} = {}", resource_id, key, value);
+        match sqlx::query(
             "INSERT INTO resource_tag (resource_id, key, value) VALUES ($1, $2, $3)
              ON CONFLICT (resource_id, key) DO UPDATE SET value = EXCLUDED.value"
         )
@@ -349,8 +432,17 @@ async fn insert_resource_tags(
         .bind(key)
         .bind(Some(value))
         .execute(pool)
-        .await?;
+        .await {
+            Ok(_) => {
+                tag_count += 1;
+                log::debug!("Tag '{}' inserted/updated successfully", key);
+            }
+            Err(e) => {
+                log::warn!("Failed to insert tag '{}' for resource {}: {}", key, resource_id, e);
+            }
+        }
     }
+    log::debug!("Inserted {} tags for resource {}", tag_count, resource_id);
     
     Ok(())
 }
@@ -360,7 +452,9 @@ async fn link_resource_to_application(
     resource_id: i64,
     application_id: i64,
 ) -> Result<()> {
-    sqlx::query(
+    log::debug!("Creating resource-application link: resource {} -> application {}", resource_id, application_id);
+    
+    match sqlx::query(
         r#"
         INSERT INTO resource_application_map (resource_id, application_id, relation_type)
         VALUES ($1, $2, 'uses')
@@ -371,7 +465,15 @@ async fn link_resource_to_application(
     .bind(application_id)
     .bind("uses")
     .execute(pool)
-    .await?;
+    .await {
+        Ok(_) => {
+            log::debug!("Resource-application link created successfully");
+        }
+        Err(e) => {
+            log::warn!("Failed to create resource-application link: {}", e);
+            return Err(e.into());
+        }
+    }
     
     Ok(())
 }

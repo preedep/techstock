@@ -80,7 +80,7 @@ fi
 
 # Run new PostgreSQL container
 print_status "Starting new PostgreSQL container..."
-print_status "Data will be persisted in: $DATA_DIR"
+print_status "Data will be persisted in Docker volume: techstock-postgres-data"
 
 docker run -d \
     --name "$CONTAINER_NAME" \
@@ -88,7 +88,7 @@ docker run -d \
     -e POSTGRES_USER="$POSTGRES_USER" \
     -e POSTGRES_PASSWORD="$POSTGRES_PASSWORD" \
     -p "$POSTGRES_PORT:5432" \
-    -v "$DATA_DIR:/var/lib/postgresql/data" \
+    -v techstock-postgres-data:/var/lib/postgresql/data \
     --restart unless-stopped \
     postgres:"$POSTGRES_VERSION"
 
@@ -128,4 +128,4 @@ echo "  Remove container:  docker rm -f $CONTAINER_NAME"
 echo "  View logs:         docker logs $CONTAINER_NAME"
 echo "  Connect to DB:     docker exec -it $CONTAINER_NAME psql -U $POSTGRES_USER -d $POSTGRES_DB"
 echo
-print_status "Data is persisted in: $DATA_DIR"
+print_status "Data is persisted in Docker volume: techstock-postgres-data"
