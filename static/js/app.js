@@ -479,6 +479,7 @@ class TechStockApp {
                 timeRange: 'all',
                 subscription: '',
                 resourceGroup: '',
+                location: '',
                 environment: '',
                 search: ''
             };
@@ -1154,6 +1155,7 @@ class TechStockApp {
             timeRange: 'all',
             subscription: '',
             resourceGroup: '',
+            location: '',
             environment: '',
             search: ''
         };
@@ -1424,6 +1426,7 @@ class TechStockApp {
             timeRange: document.getElementById('dashboard-timerange')?.value || 'all',
             subscription: document.getElementById('dashboard-subscription')?.value || '',
             resourceGroup: document.getElementById('dashboard-resource-group')?.value || '',
+            location: document.getElementById('dashboard-location')?.value || '',
             environment: document.getElementById('dashboard-environment')?.value || '',
             search: document.getElementById('dashboard-search')?.value || ''
         };
@@ -1519,6 +1522,7 @@ class TechStockApp {
             timeRange: 'all',
             subscription: '',
             resourceGroup: '',
+            location: '',
             environment: '',
             search: ''
         };
@@ -1790,6 +1794,9 @@ class TechStockApp {
             if (this.dashboardFilters.resourceGroup && this.dashboardFilters.resourceGroup !== '') {
                 filters.resource_group_id = parseInt(this.dashboardFilters.resourceGroup);
             }
+            if (this.dashboardFilters.location && this.dashboardFilters.location !== '') {
+                filters.location = this.dashboardFilters.location;
+            }
             if (this.dashboardFilters.environment && this.dashboardFilters.environment !== '') {
                 filters.environment = this.dashboardFilters.environment;
             }
@@ -1840,6 +1847,7 @@ class TechStockApp {
             timeRange: 'all',
             subscription: '',
             resourceGroup: '',
+            location: '',
             environment: '',
             search: ''
         };

@@ -54,6 +54,7 @@ pub struct CostSummary {
 pub struct DashboardFiltersDto {
     pub subscription_id: Option<i64>,
     pub resource_group_id: Option<i64>,
+    pub location: Option<String>,
     pub environment: Option<String>,
     pub time_range: Option<String>,
 }

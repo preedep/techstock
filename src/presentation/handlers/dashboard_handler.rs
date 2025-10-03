@@ -16,6 +16,11 @@ pub async fn get_dashboard_summary(
     let cleaned_filters = DashboardFiltersDto {
         subscription_id: filters.subscription_id,
         resource_group_id: filters.resource_group_id,
+        location: if filters.location.as_ref().map_or(true, |s| s.is_empty()) {
+            None
+        } else {
+            filters.location
+        },
         environment: if filters.environment.as_ref().map_or(true, |s| s.is_empty()) {
             None
         } else {

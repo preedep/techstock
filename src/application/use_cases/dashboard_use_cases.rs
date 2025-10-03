@@ -35,7 +35,7 @@ impl DashboardUseCases {
         let _resource_filters = if let Some(ref f) = filters {
             ResourceFilters {
                 resource_type: None,
-                location: None,
+                location: f.location.clone(),
                 environment: f.environment.clone(),
                 vendor: None,
                 subscription_id: f.subscription_id,
@@ -172,12 +172,12 @@ impl DashboardUseCases {
         // In production, you'd want to add filtered count methods to the repository
         let all_counts = self.resource_repository.count_by_type().await?;
         
-        // If we have subscription or resource group filters, we need to get filtered data
-        if filters.subscription_id.is_some() || filters.resource_group_id.is_some() {
+        // If we have subscription, resource group, or location filters, we need to get filtered data
+        if filters.subscription_id.is_some() || filters.resource_group_id.is_some() || filters.location.is_some() {
             // This is a simplified approach - in production you'd want optimized SQL queries
             let resource_filters = ResourceFilters {
                 resource_type: None,
-                location: None,
+                location: filters.location.clone(),
                 environment: filters.environment.clone(),
                 vendor: None,
                 subscription_id: filters.subscription_id,
@@ -219,11 +219,11 @@ impl DashboardUseCases {
         &self,
         filters: &DashboardFiltersDto,
     ) -> DomainResult<Vec<(String, i64)>> {
-        if filters.subscription_id.is_some() || filters.resource_group_id.is_some() {
+        if filters.subscription_id.is_some() || filters.resource_group_id.is_some() || filters.location.is_some() {
             // Similar implementation as above for locations
             let resource_filters = ResourceFilters {
                 resource_type: None,
-                location: None,
+                location: filters.location.clone(),
                 environment: filters.environment.clone(),
                 vendor: None,
                 subscription_id: filters.subscription_id,
@@ -262,10 +262,10 @@ impl DashboardUseCases {
         &self,
         filters: &DashboardFiltersDto,
     ) -> DomainResult<Vec<(String, i64)>> {
-        if filters.subscription_id.is_some() || filters.resource_group_id.is_some() {
+        if filters.subscription_id.is_some() || filters.resource_group_id.is_some() || filters.location.is_some() {
             let resource_filters = ResourceFilters {
                 resource_type: None,
-                location: None,
+                location: filters.location.clone(),
                 environment: filters.environment.clone(),
                 vendor: None,
                 subscription_id: filters.subscription_id,
