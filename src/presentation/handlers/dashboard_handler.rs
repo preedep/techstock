@@ -12,6 +12,9 @@ pub async fn get_dashboard_summary(
 ) -> AppResult<HttpResponse> {
     let filters = query.into_inner();
     
+    // Debug: Log received filters
+    tracing::info!("🔍 Dashboard API received filters: {:?}", filters);
+    
     // Convert empty strings to None for proper filtering
     let cleaned_filters = DashboardFiltersDto {
         subscription_id: filters.subscription_id,
@@ -32,6 +35,9 @@ pub async fn get_dashboard_summary(
             filters.time_range
         },
     };
+    
+    // Debug: Log cleaned filters
+    tracing::info!("🧹 Cleaned filters: {:?}", cleaned_filters);
 
     let summary = services
         .dashboard_use_cases

@@ -10,6 +10,15 @@ class TechStockApp {
         this.resources = [];
         this.currentTab = 'resources';
         
+        // Store current filter values for cross-tab sync
+        this.currentFilters = {
+            location: '',
+            type: '',
+            environment: '',
+            vendor: '',
+            subscription: ''
+        };
+        
         // Initialize API client with loading management
         this.loadingManager = new LoadingManager();
         this.apiClient = new RetryableApiClient('', this.loadingManager, 3);
@@ -59,15 +68,18 @@ class TechStockApp {
     init() {
         // Wait for DOM to be ready
         if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', () => {
-                this.initializeApp();
+            document.addEventListener('DOMContentLoaded', async () => {
+                await this.initializeApp();
             });
         } else {
-            this.initializeApp();
+            // Use setTimeout to make this async without blocking constructor
+            setTimeout(async () => {
+                await this.initializeApp();
+            }, 0);
         }
     }
 
-    initializeApp() {
+    async initializeApp() {
         console.log('Initializing TechStock App...');
         
         // Setup loading manager
@@ -85,7 +97,7 @@ class TechStockApp {
         this.loadResourceTypes();
         this.loadResources();
         this.setupColumnToggle();
-        this.setupDashboard();
+        await this.setupDashboard();
     }
 
     setupNoCacheHeaders() {
@@ -118,8 +130,10 @@ class TechStockApp {
         const searchBtn = document.getElementById('search-btn');
         if (searchBtn) {
             searchBtn.addEventListener('click', () => {
+                console.log('🔍 Search triggered by Search button click');
                 this.applyFilters();
             });
+            console.log('✅ Search button configured');
         } else {
             console.warn('Search button not found');
         }
@@ -133,17 +147,17 @@ class TechStockApp {
             console.warn('Clear button not found');
         }
 
-        // Search on Enter key and input change
+        // Search on Enter key only (removed auto-search on input change)
         const searchInput = document.getElementById('search-input');
         if (searchInput) {
             searchInput.addEventListener('keypress', (e) => {
                 if (e.key === 'Enter') {
+                    console.log('🔍 Search triggered by Enter key');
                     this.applyFilters();
                 }
             });
-            searchInput.addEventListener('input', () => {
-                this.debouncedApplyFilters();
-            });
+            // Removed input event listener - no more auto-search on typing
+            console.log('✅ Search input configured for Enter key only');
         } else {
             console.warn('Search input not found');
         }
@@ -222,13 +236,15 @@ class TechStockApp {
             console.warn('Page size select not found');
         }
 
-        // Filter change events
+        // Filter change events - only update state, don't trigger search
         const filterIds = ['type-filter', 'location-filter', 'environment-filter', 'vendor-filter'];
         filterIds.forEach(id => {
             const element = document.getElementById(id);
             if (element) {
-                element.addEventListener('change', () => {
-                    this.debouncedApplyFilters();
+                element.addEventListener('change', (e) => {
+                    console.log(`📝 Filter updated (not applied yet): ${id} = "${e.target.value}"`);
+                    // Only update internal state, don't trigger search
+                    this.updateCurrentFilters();
                 });
             } else {
                 console.warn(`Filter element not found: ${id}`);
@@ -239,8 +255,10 @@ class TechStockApp {
         const subscriptionFilter = document.getElementById('subscription-filter');
         if (subscriptionFilter) {
             subscriptionFilter.addEventListener('change', async () => {
+                console.log('📝 Subscription filter updated (not applied yet):', subscriptionFilter.value);
+                // Update resource groups but don't trigger search
                 await this.updateResourceGroupDropdown();
-                this.debouncedApplyFilters();
+                this.updateCurrentFilters();
             });
         } else {
             console.warn('Subscription filter not found');
@@ -271,10 +289,9 @@ class TechStockApp {
 
             // Listen for changes
             searchContainer.addEventListener('tagschange', (e) => {
-                console.log('Tags changed:', e.detail);
-                this.filters.tags = this.searchTagsDropdown.getTagsString();
-                // Auto-apply filters when tags change
-                this.debouncedApplyFilters();
+                console.log('📝 Tags updated (not applied yet):', e.detail);
+                // Only update internal state, don't trigger search
+                this.updateCurrentFilters();
             });
         } else {
             console.error('Search tags container not found!');
@@ -488,8 +505,9 @@ class TechStockApp {
             this.dashboardResources = null;
             console.log('Cleared existing dashboard resources - will load fresh from API');
             
-            this.populateDashboardFilters();
-            this.loadDashboardData();
+            this.populateDashboardFilters().then(() => {
+                this.loadDashboardData();
+            });
         }
     }
 
@@ -609,37 +627,45 @@ class TechStockApp {
         this.showTableLoading();
         
         try {
-            console.log('Loading resources with filters:', this.filters);
+            console.log('📡 Loading resources with filters:', this.filters);
             
             const params = {
                 page: this.currentPage,
                 size: this.pageSize
             };
 
-            // Add filters
+            // Add filters with detailed logging
             if (this.filters.search) {
                 params.search = this.filters.search;
+                console.log('✅ Added search filter:', this.filters.search);
             }
             if (this.filters.resource_type) {
                 params.resource_type = this.filters.resource_type;
+                console.log('✅ Added resource_type filter:', this.filters.resource_type);
             }
             if (this.filters.location) {
                 params.location = this.filters.location;
+                console.log('✅ Added location filter:', this.filters.location);
             }
             if (this.filters.environment) {
                 params.environment = this.filters.environment;
+                console.log('✅ Added environment filter:', this.filters.environment);
             }
             if (this.filters.vendor) {
                 params.vendor = this.filters.vendor;
+                console.log('✅ Added vendor filter:', this.filters.vendor);
             }
             if (this.filters.subscription_id) {
                 params.subscription_id = this.filters.subscription_id;
+                console.log('✅ Added subscription_id filter:', this.filters.subscription_id);
             }
             if (this.filters.resource_group_id) {
                 params.resource_group_id = this.filters.resource_group_id;
+                console.log('✅ Added resource_group_id filter:', this.filters.resource_group_id);
             }
             if (this.filters.tags) {
                 params.tags = this.filters.tags;
+                console.log('✅ Added tags filter:', this.filters.tags);
             }
 
             // Add sorting
@@ -647,6 +673,8 @@ class TechStockApp {
                 params.sort_field = this.sortField;
                 params.sort_direction = this.sortDirection;
             }
+
+            console.log('🌐 Final API parameters:', params);
 
             const data = await this.apiClient.getResources(params, { 
                 signal: this.abortControllers.resources.signal 
@@ -680,7 +708,7 @@ class TechStockApp {
                 
                 // Only populate filter options on first load (not on filter changes)
                 if (!this.dataCache.lastResourcesQuery) {
-                    this.populateFilterOptions();
+                    await this.populateFilterOptions();
                     this.dataCache.lastResourcesQuery = 'initialized';
                 }
             } else {
@@ -868,30 +896,66 @@ class TechStockApp {
         document.getElementById('resource-count').textContent = `${total} รายการ`;
     }
 
-    populateFilterOptions() {
+    async populateFilterOptions() {
         if (!this.resources || this.resources.length === 0) {
             console.log('No resources to populate filter options');
             return;
         }
 
-        // Populate filter dropdowns with unique values from current data (except types)
-        const locations = [...new Set(this.resources.map(r => r.location).filter(Boolean))];
-        const environments = [...new Set(this.resources.map(r => r.environment).filter(Boolean))];
-        const vendors = [...new Set(this.resources.map(r => r.vendor).filter(Boolean))];
-
-        console.log('Populating filter options:', { 
-            locations: locations.length, 
-            environments: environments.length, 
-            vendors: vendors.length 
-        });
-        console.log('Sample resource:', this.resources[0]);
-
-        // Note: type-filter is populated from API in loadResourceTypes()
-        this.populateSelect('location-filter', locations);
-        this.populateSelect('environment-filter', environments);
-        this.populateSelect('vendor-filter', vendors);
+        // Populate filter dropdowns using API to get ALL data (not just current page)
+        await this.populateResourceFiltersFromAPI();
         this.populateSubscriptionSelect();
         this.updateResourceGroupDropdown();
+    }
+
+    async populateResourceFiltersFromAPI() {
+        console.log('🔄 Populating resource filters from API...');
+        
+        try {
+            // Get ALL resources to populate filters (not just current page)
+            const response = await this.apiClient.get('/api/v1/resources', {
+                size: 10000 // Large number to get all resources
+            });
+            
+            const allResources = response.data || [];
+            console.log('📊 Got all resources for filters:', allResources.length);
+            
+            // Get unique values
+            const locations = [...new Set(allResources.map(r => r.location).filter(Boolean))];
+            const environments = [...new Set(allResources.map(r => r.environment).filter(Boolean))];
+            const vendors = [...new Set(allResources.map(r => r.vendor).filter(Boolean))];
+            
+            console.log('📍 Filter options found:', { 
+                locations: locations.length, 
+                environments: environments.length, 
+                vendors: vendors.length 
+            });
+            console.log('📍 All locations:', locations);
+            
+            // Populate dropdowns
+            this.populateSelect('location-filter', locations);
+            this.populateSelect('environment-filter', environments);
+            this.populateSelect('vendor-filter', vendors);
+            
+            console.log('✅ Resource filters populated successfully');
+            
+        } catch (error) {
+            console.error('❌ Failed to populate resource filters from API:', error);
+            
+            // Fallback to using this.resources if available
+            if (this.resources && this.resources.length > 0) {
+                console.log('🔄 Falling back to this.resources for filter options');
+                const locations = [...new Set(this.resources.map(r => r.location).filter(Boolean))];
+                const environments = [...new Set(this.resources.map(r => r.environment).filter(Boolean))];
+                const vendors = [...new Set(this.resources.map(r => r.vendor).filter(Boolean))];
+                
+                this.populateSelect('location-filter', locations);
+                this.populateSelect('environment-filter', environments);
+                this.populateSelect('vendor-filter', vendors);
+                
+                console.log('⚠️ Used fallback data for filters');
+            }
+        }
     }
 
     populateSelect(selectId, options) {
@@ -1075,15 +1139,16 @@ class TechStockApp {
     }
 
     applyFilters() {
-        console.log('Applying filters...');
+        console.log('🚀 APPLYING FILTERS...');
         
-        this.filters = {
-            search: document.getElementById('search-input').value.trim(),
-            resource_type: document.getElementById('type-filter').value,
-            location: document.getElementById('location-filter').value,
-            environment: document.getElementById('environment-filter').value,
-            vendor: document.getElementById('vendor-filter').value,
-            subscription_id: document.getElementById('subscription-filter').value,
+        // Read current filter values from DOM
+        const filterValues = {
+            search: document.getElementById('search-input')?.value.trim() || '',
+            resource_type: document.getElementById('type-filter')?.value || '',
+            location: document.getElementById('location-filter')?.value || '',
+            environment: document.getElementById('environment-filter')?.value || '',
+            vendor: document.getElementById('vendor-filter')?.value || '',
+            subscription_id: document.getElementById('subscription-filter')?.value || '',
             resource_group_id: this.resourceGroupDropdown ? this.resourceGroupDropdown.getValue() : null
         };
 
@@ -1091,11 +1156,15 @@ class TechStockApp {
         if (this.searchTagsDropdown) {
             const tagsString = this.searchTagsDropdown.getTagsString();
             if (tagsString) {
-                this.filters.tags = tagsString;
+                filterValues.tags = tagsString;
             }
         }
 
-        console.log('Applied filters:', this.filters);
+        // Update internal filters
+        this.filters = filterValues;
+
+        console.log('📊 Filter values read from DOM:', filterValues);
+        console.log('🔍 Active filters (non-empty):', Object.entries(this.filters).filter(([key, value]) => value && value !== ''));
 
         this.currentPage = 1;
         this.loadResources();
@@ -1144,7 +1213,7 @@ class TechStockApp {
     }
 
     // ========== Dashboard Methods ==========
-    setupDashboard() {
+    async setupDashboard() {
         this.charts = {
             resourceTypes: null,
             locations: null,
@@ -1153,17 +1222,19 @@ class TechStockApp {
         
         this.dashboardFilters = {
             timeRange: 'all',
-            subscription: '',
-            resourceGroup: '',
-            location: '',
-            environment: '',
-            search: ''
+            subscription: '',      // Empty = All Subscriptions
+            resourceGroup: '',     // Empty = All Resource Groups  
+            location: '',          // Empty = All Locations
+            environment: '',       // Empty = All Environments
+            search: ''             // Empty = No search filter
         };
         
-        this.setupDashboardEventListeners();
+        console.log('🏁 Dashboard filters initialized:', this.dashboardFilters);
+        
+        await this.setupDashboardEventListeners();
     }
 
-    setupDashboardEventListeners() {
+    async setupDashboardEventListeners() {
         // Dashboard controls
         const refreshBtn = document.getElementById('refresh-dashboard');
         if (refreshBtn) {
@@ -1188,30 +1259,11 @@ class TechStockApp {
 
         const clearFiltersBtn = document.getElementById('clear-dashboard-filters');
         if (clearFiltersBtn) {
-            clearFiltersBtn.addEventListener('click', () => this.clearDashboardFilters());
+            clearFiltersBtn.addEventListener('click', async () => await this.clearDashboardFilters());
         }
 
-        // Cascading filter listeners
-        const subscriptionSelect = document.getElementById('dashboard-subscription');
-        if (subscriptionSelect) {
-            subscriptionSelect.addEventListener('change', (e) => {
-                this.onSubscriptionFilterChange(e.target.value);
-            });
-        }
-
-        const resourceGroupSelect = document.getElementById('dashboard-resource-group');
-        if (resourceGroupSelect) {
-            resourceGroupSelect.addEventListener('change', (e) => {
-                this.onResourceGroupFilterChange(e.target.value);
-            });
-        }
-
-        const environmentSelect = document.getElementById('dashboard-environment');
-        if (environmentSelect) {
-            environmentSelect.addEventListener('change', (e) => {
-                this.onEnvironmentFilterChange(e.target.value);
-            });
-        }
+        // Setup simplified filter listeners (no auto-API calls)
+        this.setupDashboardFilterListeners();
 
         // Widget controls
         document.addEventListener('click', (e) => {
@@ -1225,10 +1277,93 @@ class TechStockApp {
         });
 
         // Populate dashboard filter dropdowns
-        this.populateDashboardFilters();
+        await this.populateDashboardFilters();
     }
 
-    populateDashboardFilters() {
+    setupDashboardFilterListeners(retryCount = 0) {
+        const maxRetries = 5;
+        const retryDelay = 500; // 500ms
+        
+        console.log(`🔄 Setting up dashboard filter listeners (attempt ${retryCount + 1}/${maxRetries + 1})`);
+        
+        const subscriptionSelect = document.getElementById('dashboard-subscription');
+        if (subscriptionSelect) {
+            console.log('✅ Dashboard subscription dropdown found - adding simple change listener');
+            subscriptionSelect.addEventListener('change', async (e) => {
+                console.log('📝 Subscription filter updated (not applied yet):', e.target.value);
+                // Only update internal state, don't call API yet
+                await this.updateSubscriptionFilterState(e.target.value);
+            });
+            
+            // Setup other filter listeners
+            this.setupOtherFilterListeners();
+            return; // Success, exit
+        } else {
+            console.warn(`⚠️ Dashboard subscription dropdown NOT FOUND (attempt ${retryCount + 1})`);
+            
+            if (retryCount < maxRetries) {
+                console.log(`🔄 Retrying in ${retryDelay}ms...`);
+                setTimeout(() => {
+                    this.setupDashboardFilterListeners(retryCount + 1);
+                }, retryDelay);
+            } else {
+                console.error('❌ Failed to find dashboard subscription dropdown after all retries!');
+                console.error('Available select elements:');
+                document.querySelectorAll('select').forEach((select, index) => {
+                    console.error(`  Select ${index}: id="${select.id}" class="${select.className}"`);
+                });
+            }
+        }
+    }
+
+    setupOtherFilterListeners() {
+        // Resource Group filter - only update state
+        const resourceGroupSelect = document.getElementById('dashboard-resource-group');
+        if (resourceGroupSelect) {
+            resourceGroupSelect.addEventListener('change', (e) => {
+                console.log('📝 Resource Group filter updated (not applied yet):', e.target.value);
+                this.dashboardFilters.resourceGroup = e.target.value;
+            });
+        }
+
+        // Location filter - only update state  
+        const locationSelect = document.getElementById('dashboard-location');
+        if (locationSelect) {
+            locationSelect.addEventListener('change', (e) => {
+                console.log('📝 Location filter updated (not applied yet):', e.target.value);
+                this.dashboardFilters.location = e.target.value;
+            });
+        }
+
+        // Environment filter - only update state
+        const environmentSelect = document.getElementById('dashboard-environment');
+        if (environmentSelect) {
+            environmentSelect.addEventListener('change', (e) => {
+                console.log('📝 Environment filter updated (not applied yet):', e.target.value);
+                this.dashboardFilters.environment = e.target.value;
+            });
+        }
+
+        // Search filter - only update state (with debounce)
+        const searchInput = document.getElementById('dashboard-search');
+        if (searchInput) {
+            searchInput.addEventListener('input', (e) => {
+                console.log('📝 Search filter updated (not applied yet):', e.target.value);
+                this.dashboardFilters.search = e.target.value;
+            });
+        }
+
+        // Time range filter - only update state
+        const timeRangeSelect = document.getElementById('dashboard-timerange');
+        if (timeRangeSelect) {
+            timeRangeSelect.addEventListener('change', (e) => {
+                console.log('📝 Time range filter updated (not applied yet):', e.target.value);
+                this.dashboardFilters.timeRange = e.target.value;
+            });
+        }
+    }
+
+    async populateDashboardFilters() {
         // Populate subscription dropdown
         const subscriptionSelect = document.getElementById('dashboard-subscription');
         if (subscriptionSelect && this.subscriptions) {
@@ -1244,63 +1379,37 @@ class TechStockApp {
         // Populate resource group dropdown (initially empty)
         this.populateResourceGroupFilter('');
 
+        // Populate location dropdown from resources
+        await this.populateLocationFilter();
+
         // Populate environment dropdown from resources
-        this.populateEnvironmentFilter();
+        await this.populateEnvironmentFilter();
     }
 
-    async onSubscriptionFilterChange(subscriptionId) {
-        console.log('Subscription filter changed:', subscriptionId);
+    async updateSubscriptionFilterState(subscriptionId) {
+        console.log('📝 Updating subscription filter state to:', subscriptionId);
         
-        // Update dashboard filters immediately
+        // Update internal state only
         this.dashboardFilters.subscription = subscriptionId;
-        this.dashboardFilters.resourceGroup = ''; // Reset when subscription changes
-        this.dashboardFilters.environment = ''; // Reset when subscription changes
+        this.dashboardFilters.resourceGroup = ''; // Reset dependent filters
+        this.dashboardFilters.environment = ''; // Reset dependent filters
         
-        // Reset UI elements
-        document.getElementById('dashboard-resource-group').value = '';
-        document.getElementById('dashboard-environment').value = '';
+        // Update UI dropdowns (but don't trigger API calls)
+        const resourceGroupSelect = document.getElementById('dashboard-resource-group');
+        const environmentSelect = document.getElementById('dashboard-environment');
         
-        // Reset resource group filter
-        await this.populateResourceGroupFilter(subscriptionId);
+        if (resourceGroupSelect) resourceGroupSelect.value = '';
+        if (environmentSelect) environmentSelect.value = '';
         
-        // Reset environment filter based on subscription
-        this.populateEnvironmentFilter(subscriptionId);
+        // Populate dependent dropdowns for better UX
+        this.populateResourceGroupFilter(subscriptionId);
+        await this.populateLocationFilter(subscriptionId);
+        await this.populateEnvironmentFilter(subscriptionId);
         
-        // Auto-refresh dashboard with new subscription scope
-        console.log('Auto-refreshing dashboard for subscription:', subscriptionId);
-        const subscriptionName = subscriptionId ? this.getSubscriptionName(subscriptionId) : 'All Subscriptions';
-        this.showToast(`Dashboard scope: ${subscriptionName}`, 'info');
-        this.loadDashboardData();
+        console.log('📝 Filter state updated (waiting for Apply button)');
     }
 
-    onResourceGroupFilterChange(resourceGroupId) {
-        console.log('Resource Group filter changed:', resourceGroupId);
-        
-        // Update dashboard filters immediately
-        this.dashboardFilters.resourceGroup = resourceGroupId;
-        this.dashboardFilters.environment = ''; // Reset when resource group changes
-        
-        // Reset UI elements
-        document.getElementById('dashboard-environment').value = '';
-        
-        // Update environment filter based on resource group
-        this.populateEnvironmentFilter(this.dashboardFilters.subscription, resourceGroupId);
-        
-        // Auto-refresh dashboard with new resource group scope
-        console.log('Auto-refreshing dashboard for resource group:', resourceGroupId);
-        this.loadDashboardData();
-    }
-
-    onEnvironmentFilterChange(environment) {
-        console.log('Environment filter changed:', environment);
-        
-        // Update dashboard filters immediately
-        this.dashboardFilters.environment = environment;
-        
-        // Auto-refresh dashboard with new environment scope
-        console.log('Auto-refreshing dashboard for environment:', environment);
-        this.loadDashboardData();
-    }
+    // Old filter change functions removed - now using Apply Filter button workflow
 
     async populateResourceGroupFilter(subscriptionId) {
         const resourceGroupSelect = document.getElementById('dashboard-resource-group');
@@ -1337,31 +1446,136 @@ class TechStockApp {
         }
     }
 
-    populateEnvironmentFilter(subscriptionId = '', resourceGroupId = '') {
+    async populateLocationFilter(subscriptionId = '', resourceGroupId = '') {
+        const locationSelect = document.getElementById('dashboard-location');
+        if (!locationSelect) {
+            console.warn('⚠️ Location select element not found');
+            return;
+        }
+
+        console.log('🔄 Populating location filter with subscriptionId:', subscriptionId, 'resourceGroupId:', resourceGroupId);
+        
+        try {
+            // Use API to get locations instead of relying on this.resources
+            let apiUrl = '/api/v1/resources?size=10000'; // Get large number to ensure all locations
+            
+            if (subscriptionId) {
+                apiUrl += `&subscription_id=${subscriptionId}`;
+            }
+            if (resourceGroupId) {
+                apiUrl += `&resource_group_id=${resourceGroupId}`;
+            }
+            
+            console.log('📡 Fetching locations from API:', apiUrl);
+            const response = await this.apiClient.get('/api/v1/resources', {
+                size: 10000,
+                ...(subscriptionId && { subscription_id: subscriptionId }),
+                ...(resourceGroupId && { resource_group_id: resourceGroupId })
+            });
+            
+            const resources = response.data || [];
+            console.log('📊 Got resources for location filter:', resources.length);
+            
+            // Get unique locations from API response
+            const locations = [...new Set(resources.map(r => r.location).filter(Boolean))];
+            console.log('📍 Unique locations found:', locations);
+            
+            locationSelect.innerHTML = '<option value="">All Locations</option>';
+            locations.forEach(loc => {
+                const option = document.createElement('option');
+                option.value = loc;
+                option.textContent = loc;
+                locationSelect.appendChild(option);
+            });
+            
+            console.log('✅ Location filter populated with', locations.length, 'locations');
+            
+        } catch (error) {
+            console.error('❌ Failed to populate location filter:', error);
+            // Fallback to using this.resources if available
+            if (this.resources) {
+                console.log('🔄 Falling back to this.resources');
+                let filteredResources = this.resources;
+                
+                if (subscriptionId) {
+                    filteredResources = filteredResources.filter(r => r.subscription_id == subscriptionId);
+                }
+                if (resourceGroupId) {
+                    filteredResources = filteredResources.filter(r => r.resource_group_id == resourceGroupId);
+                }
+
+                const locations = [...new Set(filteredResources.map(r => r.location).filter(Boolean))];
+                
+                locationSelect.innerHTML = '<option value="">All Locations</option>';
+                locations.forEach(loc => {
+                    const option = document.createElement('option');
+                    option.value = loc;
+                    option.textContent = loc;
+                    locationSelect.appendChild(option);
+                });
+            }
+        }
+    }
+
+    async populateEnvironmentFilter(subscriptionId = '', resourceGroupId = '') {
         const environmentSelect = document.getElementById('dashboard-environment');
-        if (!environmentSelect || !this.resources) return;
-
-        // Filter resources based on current filters
-        let filteredResources = this.resources;
-        
-        if (subscriptionId) {
-            filteredResources = filteredResources.filter(r => r.subscription_id == subscriptionId);
-        }
-        
-        if (resourceGroupId) {
-            filteredResources = filteredResources.filter(r => r.resource_group_id == resourceGroupId);
+        if (!environmentSelect) {
+            console.warn('⚠️ Environment select element not found');
+            return;
         }
 
-        // Get unique environments from filtered resources
-        const environments = [...new Set(filteredResources.map(r => r.environment).filter(Boolean))];
+        console.log('🔄 Populating environment filter with subscriptionId:', subscriptionId, 'resourceGroupId:', resourceGroupId);
         
-        environmentSelect.innerHTML = '<option value="">All Environments</option>';
-        environments.forEach(env => {
-            const option = document.createElement('option');
-            option.value = env;
-            option.textContent = env;
-            environmentSelect.appendChild(option);
-        });
+        try {
+            // Use API to get environments instead of relying on this.resources
+            const response = await this.apiClient.get('/api/v1/resources', {
+                size: 10000,
+                ...(subscriptionId && { subscription_id: subscriptionId }),
+                ...(resourceGroupId && { resource_group_id: resourceGroupId })
+            });
+            
+            const resources = response.data || [];
+            console.log('📊 Got resources for environment filter:', resources.length);
+            
+            // Get unique environments from API response
+            const environments = [...new Set(resources.map(r => r.environment).filter(Boolean))];
+            console.log('🌍 Unique environments found:', environments);
+            
+            environmentSelect.innerHTML = '<option value="">All Environments</option>';
+            environments.forEach(env => {
+                const option = document.createElement('option');
+                option.value = env;
+                option.textContent = env;
+                environmentSelect.appendChild(option);
+            });
+            
+            console.log('✅ Environment filter populated with', environments.length, 'environments');
+            
+        } catch (error) {
+            console.error('❌ Failed to populate environment filter:', error);
+            // Fallback to using this.resources if available
+            if (this.resources) {
+                console.log('🔄 Falling back to this.resources for environments');
+                let filteredResources = this.resources;
+                
+                if (subscriptionId) {
+                    filteredResources = filteredResources.filter(r => r.subscription_id == subscriptionId);
+                }
+                if (resourceGroupId) {
+                    filteredResources = filteredResources.filter(r => r.resource_group_id == resourceGroupId);
+                }
+
+                const environments = [...new Set(filteredResources.map(r => r.environment).filter(Boolean))];
+                
+                environmentSelect.innerHTML = '<option value="">All Environments</option>';
+                environments.forEach(env => {
+                    const option = document.createElement('option');
+                    option.value = env;
+                    option.textContent = env;
+                    environmentSelect.appendChild(option);
+                });
+            }
+        }
     }
 
     handleWidgetAction(widget, action) {
@@ -1421,8 +1635,10 @@ class TechStockApp {
     }
 
     applyDashboardFilters() {
-        // Get filter values
-        this.dashboardFilters = {
+        console.log('🚀 APPLYING DASHBOARD FILTERS...');
+        
+        // Read current values from UI (in case user changed without triggering events)
+        const currentFilters = {
             timeRange: document.getElementById('dashboard-timerange')?.value || 'all',
             subscription: document.getElementById('dashboard-subscription')?.value || '',
             resourceGroup: document.getElementById('dashboard-resource-group')?.value || '',
@@ -1431,10 +1647,33 @@ class TechStockApp {
             search: document.getElementById('dashboard-search')?.value || ''
         };
         
-        console.log('Applying dashboard filters:', this.dashboardFilters);
+        // Update internal state with current UI values
+        this.dashboardFilters = currentFilters;
         
-        // Reload dashboard with filters
-        this.loadDashboardData();
+        console.log('📊 Final filters to apply:', JSON.stringify(this.dashboardFilters, null, 2));
+        
+        // Debug: Check which filters have values
+        Object.keys(this.dashboardFilters).forEach(key => {
+            const value = this.dashboardFilters[key];
+            if (value && value !== '' && value !== 'all') {
+                console.log(`✅ Active filter: ${key} = "${value}"`);
+            } else {
+                console.log(`⚪ Empty filter: ${key} = "${value}"`);
+            }
+        });
+        
+        // Show loading state
+        this.showToast('Applying filters...', 'info');
+        
+        // Apply filters and refresh dashboard - THIS IS THE ONLY API CALL
+        this.loadDashboardData()
+            .then(() => {
+                this.showToast('Filters applied successfully! 🎯', 'success');
+            })
+            .catch((error) => {
+                console.error('Failed to apply filters:', error);
+                this.showToast('Failed to apply filters. Please try again.', 'error');
+            });
     }
 
     exportDashboard() {
@@ -1540,6 +1779,155 @@ class TechStockApp {
         // Force reload
         await this.loadDashboardData();
         console.log('Dashboard force reloaded with fresh API data');
+    }
+
+    // Test dashboard API with specific filters - call from console
+    async testDashboardWithFilters(subscriptionId = null, resourceGroupId = null, location = null, environment = null) {
+        console.log('=== TESTING DASHBOARD WITH FILTERS ===');
+        console.log('Test filters:', { subscriptionId, resourceGroupId, location, environment });
+        
+        // Set test filters
+        this.dashboardFilters = {
+            timeRange: 'all',
+            subscription: subscriptionId ? subscriptionId.toString() : '',
+            resourceGroup: resourceGroupId ? resourceGroupId.toString() : '',
+            location: location || '',
+            environment: environment || '',
+            search: ''
+        };
+        
+        console.log('Set dashboard filters to:', this.dashboardFilters);
+        
+        try {
+            // Call the API directly
+            const summary = await this.loadDashboardSummary();
+            console.log('✅ Test successful! Summary:', summary);
+            
+            // Update the dashboard
+            this.updateDashboardWithSummary(summary);
+            
+            return summary;
+        } catch (error) {
+            console.error('❌ Test failed:', error);
+            return null;
+        }
+    }
+
+    // Quick test function for Apply Filter workflow
+    async testApplyFilterWorkflow() {
+        console.log('=== TESTING APPLY FILTER WORKFLOW ===');
+        
+        // Set a subscription in the dropdown
+        const subscriptionSelect = document.getElementById('dashboard-subscription');
+        if (subscriptionSelect && subscriptionSelect.options.length > 1) {
+            // Select the first non-empty option
+            subscriptionSelect.value = subscriptionSelect.options[1].value;
+            console.log('✅ Set subscription to:', subscriptionSelect.value);
+            
+            // Trigger the apply filters
+            this.applyDashboardFilters();
+            
+            return true;
+        } else {
+            console.error('❌ No subscription dropdown or no options available');
+            return false;
+        }
+    }
+
+    syncFiltersFromResourcesTab() {
+        console.log('=== SYNCING FILTERS FROM RESOURCES TAB ===');
+        
+        // Use stored filter values instead of DOM elements (since Resources tab might be hidden)
+        const locationFilter = this.currentFilters?.location || '';
+        const typeFilter = this.currentFilters?.type || '';
+        const environmentFilter = this.currentFilters?.environment || '';
+        const vendorFilter = this.currentFilters?.vendor || '';
+        const subscriptionFilter = this.currentFilters?.subscription || '';
+        
+        console.log('Current stored filters:', this.currentFilters);
+        console.log('Resources tab filters:', {
+            location: locationFilter,
+            type: typeFilter,
+            environment: environmentFilter,
+            vendor: vendorFilter,
+            subscription: subscriptionFilter
+        });
+        
+        // Map subscription name to ID for API
+        let subscriptionId = '';
+        if (subscriptionFilter && subscriptionFilter !== '') {
+            // Find subscription ID by name
+            const subscription = this.subscriptions?.find(s => s.name === subscriptionFilter);
+            subscriptionId = subscription ? subscription.id.toString() : '';
+            console.log('Subscription mapping:', subscriptionFilter, '→', subscriptionId);
+        }
+        
+        // Update dashboard filters
+        this.dashboardFilters = {
+            timeRange: 'all',
+            subscription: subscriptionId,
+            resourceGroup: '',
+            location: locationFilter,
+            environment: environmentFilter,
+            search: ''
+        };
+        
+        console.log('Dashboard filters updated:', this.dashboardFilters);
+    }
+
+    updateCurrentFilters() {
+        // Update stored filter values from DOM elements
+        const locationEl = document.getElementById('location-filter');
+        const typeEl = document.getElementById('type-filter');
+        const environmentEl = document.getElementById('environment-filter');
+        const vendorEl = document.getElementById('vendor-filter');
+        const subscriptionEl = document.getElementById('subscription-filter');
+        
+        this.currentFilters = {
+            location: locationEl?.value || '',
+            type: typeEl?.value || '',
+            environment: environmentEl?.value || '',
+            vendor: vendorEl?.value || '',
+            subscription: subscriptionEl?.value || ''
+        };
+        
+        console.log('Filter elements debug:');
+        console.log('- Location element:', locationEl, 'value:', locationEl?.value);
+        console.log('- Subscription element:', subscriptionEl, 'value:', subscriptionEl?.value);
+        console.log('Current filters updated:', this.currentFilters);
+    }
+
+    // Manual test function - call from console
+    async testDashboardFilters() {
+        console.log('=== MANUAL DASHBOARD FILTER TEST ===');
+        
+        // Force update current filters
+        this.updateCurrentFilters();
+        console.log('1. Current filters:', this.currentFilters);
+        
+        // Force sync to dashboard
+        this.syncFiltersFromResourcesTab();
+        console.log('2. Dashboard filters:', this.dashboardFilters);
+        
+        // Test API call directly
+        const filters = {};
+        if (this.dashboardFilters.subscription && this.dashboardFilters.subscription !== '') {
+            filters.subscription_id = parseInt(this.dashboardFilters.subscription);
+        }
+        if (this.dashboardFilters.location && this.dashboardFilters.location !== '') {
+            filters.location = this.dashboardFilters.location;
+        }
+        
+        console.log('3. API filters to send:', filters);
+        
+        try {
+            const result = await this.apiClient.getDashboardSummary(filters);
+            console.log('4. API result:', result);
+            return result;
+        } catch (error) {
+            console.error('5. API error:', error);
+            return null;
+        }
     }
 
     updateDashboardWithSummary(summary) {
@@ -1788,28 +2176,66 @@ class TechStockApp {
             
             // Build filters from current dashboard filters
             const filters = {};
+            
+            console.log('Raw dashboard filters:', this.dashboardFilters);
+            
             if (this.dashboardFilters.subscription && this.dashboardFilters.subscription !== '') {
-                filters.subscription_id = parseInt(this.dashboardFilters.subscription);
+                const subId = parseInt(this.dashboardFilters.subscription);
+                if (!isNaN(subId)) {
+                    filters.subscription_id = subId;
+                    console.log('✅ Added subscription filter:', subId);
+                } else {
+                    console.warn('❌ Invalid subscription ID:', this.dashboardFilters.subscription);
+                }
             }
+            
             if (this.dashboardFilters.resourceGroup && this.dashboardFilters.resourceGroup !== '') {
-                filters.resource_group_id = parseInt(this.dashboardFilters.resourceGroup);
+                const rgId = parseInt(this.dashboardFilters.resourceGroup);
+                if (!isNaN(rgId)) {
+                    filters.resource_group_id = rgId;
+                    console.log('✅ Added resource group filter:', rgId);
+                } else {
+                    console.warn('❌ Invalid resource group ID:', this.dashboardFilters.resourceGroup);
+                }
             }
+            
             if (this.dashboardFilters.location && this.dashboardFilters.location !== '') {
                 filters.location = this.dashboardFilters.location;
+                console.log('✅ Added location filter:', this.dashboardFilters.location);
             }
+            
             if (this.dashboardFilters.environment && this.dashboardFilters.environment !== '') {
                 filters.environment = this.dashboardFilters.environment;
+                console.log('✅ Added environment filter:', this.dashboardFilters.environment);
             }
+            
             if (this.dashboardFilters.timeRange && this.dashboardFilters.timeRange !== 'all') {
                 filters.time_range = this.dashboardFilters.timeRange;
+                console.log('✅ Added time range filter:', this.dashboardFilters.timeRange);
             }
             
             console.log('Dashboard API filters:', filters);
+            console.log('Number of filters:', Object.keys(filters).length);
             console.log('Making API call to getDashboardSummary...');
             console.log('API endpoint: /api/v1/dashboard/summary');
             
+            // Debug: Show exact API URL that will be called
+            const queryParams = new URLSearchParams();
+            Object.keys(filters).forEach(key => {
+                if (filters[key] !== undefined && filters[key] !== null) {
+                    queryParams.append(key, filters[key].toString());
+                    console.log(`Adding query param: ${key} = ${filters[key]}`);
+                }
+            });
+            const queryString = queryParams.toString();
+            const apiUrl = `/api/v1/dashboard/summary${queryString ? '?' + queryString : ''}`;
+            console.log('Full API URL:', apiUrl);
+            console.log('Query string:', queryString);
+            
+            console.log('🚀 About to call API with filters:', filters);
             const data = await this.apiClient.getDashboardSummary(filters);
-            console.log('API Response received:', data);
+            console.log('📥 API Response received:', data);
+            console.log('📊 Response data structure:', JSON.stringify(data, null, 2));
             
             if (data.success) {
                 const summary = data.data;
@@ -1839,7 +2265,7 @@ class TechStockApp {
         }
     }
 
-    clearDashboardFilters() {
+    async clearDashboardFilters() {
         console.log('Clearing all dashboard filters...');
         
         // Reset filter values
@@ -1860,7 +2286,7 @@ class TechStockApp {
         document.getElementById('dashboard-search').value = '';
         
         // Repopulate dropdowns with all options
-        this.populateDashboardFilters();
+        await this.populateDashboardFilters();
         
         // Reload dashboard with no filters
         this.loadDashboardData();
@@ -1872,6 +2298,9 @@ class TechStockApp {
         try {
             console.log('=== LOADING DASHBOARD DATA ===');
             console.log('Available resources in memory:', this.resources?.length || 0);
+            
+            // Sync filters from Resources tab before loading
+            this.syncFiltersFromResourcesTab();
             console.log('Current filters:', this.dashboardFilters);
             
             // Load dashboard summary from API

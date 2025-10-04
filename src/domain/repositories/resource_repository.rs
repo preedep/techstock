@@ -24,4 +24,9 @@ pub trait ResourceRepository: Send + Sync {
     async fn count_by_location(&self) -> DomainResult<Vec<(String, i64)>>;
     async fn count_by_environment(&self) -> DomainResult<Vec<(String, i64)>>;
     async fn get_distinct_resource_types(&self) -> DomainResult<Vec<String>>;
+    
+    // Filtered count methods for dashboard
+    async fn count_by_type_filtered(&self, subscription_id: Option<i64>, resource_group_id: Option<i64>, location: Option<&str>, environment: Option<&str>) -> DomainResult<Vec<(String, i64)>>;
+    async fn count_by_location_filtered(&self, subscription_id: Option<i64>, resource_group_id: Option<i64>, environment: Option<&str>) -> DomainResult<Vec<(String, i64)>>;
+    async fn count_by_environment_filtered(&self, subscription_id: Option<i64>, resource_group_id: Option<i64>, location: Option<&str>) -> DomainResult<Vec<(String, i64)>>;
 }

@@ -315,6 +315,8 @@ class TagsDropdown {
     }
 
     renderSelectedTags() {
+        console.log('🏷️ Rendering selected tags:', Array.from(this.selectedTags.entries()));
+        
         const tagsHtml = Array.from(this.selectedTags.entries())
             .map(([key, value]) => `
                 <div class="selected-tag" data-key="${key}">
@@ -322,19 +324,24 @@ class TagsDropdown {
                         <span class="selected-tag-key">${key}</span>:
                         <span class="selected-tag-value">${value}</span>
                     </span>
-                    <button type="button" class="remove-tag" data-remove-key="${key}">
+                    <button type="button" class="remove-tag" data-remove-key="${key}" title="ลบ tag นี้">
                         <i class="fas fa-times"></i>
                     </button>
                 </div>
             `).join('');
 
         this.elements.selectedTags.innerHTML = tagsHtml;
+        console.log('🏷️ Tags HTML rendered:', tagsHtml);
 
         // Attach remove events
-        this.elements.selectedTags.querySelectorAll('.remove-tag').forEach(btn => {
+        const removeButtons = this.elements.selectedTags.querySelectorAll('.remove-tag');
+        console.log('🏷️ Found remove buttons:', removeButtons.length);
+        
+        removeButtons.forEach(btn => {
             btn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 const key = btn.dataset.removeKey;
+                console.log('🗑️ Removing tag:', key);
                 this.removeTag(key);
             });
         });

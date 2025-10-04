@@ -77,8 +77,8 @@
 }
 
 .remove-tag {
-    background: none;
-    border: none;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.3);
     color: white;
     margin-left: 6px;
     padding: 2px;
@@ -89,12 +89,19 @@
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    transition: background-color 0.2s ease;
+    transition: all 0.2s ease;
     font-size: 0.75rem;
+    opacity: 0.8;
 }
 
 .remove-tag:hover {
-    background-color: rgba(255, 255, 255, 0.2);
+    background-color: rgba(255, 255, 255, 0.3);
+    opacity: 1;
+    transform: scale(1.1);
+}
+
+.remove-tag:active {
+    transform: scale(0.95);
 }
 
 /* Input Field */

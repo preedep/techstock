@@ -118,15 +118,15 @@ impl ResourceRepository for PostgresResourceRepository {
         }
 
         if let Some(location) = &filters.location {
-            where_conditions.push(format!("location ILIKE '%{}%'", location.replace("'", "''")));
+            where_conditions.push(format!("location = '{}'", location.replace("'", "''")));
         }
 
         if let Some(environment) = &filters.environment {
-            where_conditions.push(format!("environment ILIKE '%{}%'", environment.replace("'", "''")));
+            where_conditions.push(format!("environment = '{}'", environment.replace("'", "''")));
         }
 
         if let Some(vendor) = &filters.vendor {
-            where_conditions.push(format!("vendor ILIKE '%{}%'", vendor.replace("'", "''")));
+            where_conditions.push(format!("vendor = '{}'", vendor.replace("'", "''")));
         }
 
         if let Some(subscription_id) = filters.subscription_id {
@@ -385,7 +385,10 @@ impl ResourceRepository for PostgresResourceRepository {
     }
 
     async fn count_by_type(&self) -> DomainResult<Vec<(String, i64)>> {
-        let rows = sqlx::query("SELECT type, COUNT(*) as count FROM resource GROUP BY type ORDER BY count DESC")
+        let sql = "SELECT type, COUNT(*) as count FROM resource GROUP BY type ORDER BY count DESC";
+        tracing::info!("📊 Executing UNFILTERED count_by_type SQL: {}", sql);
+        
+        let rows = sqlx::query(sql)
             .fetch_all(&self.pool)
             .await
             .map_err(|e| DomainError::database_error(format!("Failed to count by type: {}", e)))?;
@@ -394,7 +397,10 @@ impl ResourceRepository for PostgresResourceRepository {
     }
 
     async fn count_by_location(&self) -> DomainResult<Vec<(String, i64)>> {
-        let rows = sqlx::query("SELECT location, COUNT(*) as count FROM resource GROUP BY location ORDER BY count DESC")
+        let sql = "SELECT location, COUNT(*) as count FROM resource GROUP BY location ORDER BY count DESC";
+        tracing::info!("📊 Executing UNFILTERED count_by_location SQL: {}", sql);
+        
+        let rows = sqlx::query(sql)
             .fetch_all(&self.pool)
             .await
             .map_err(|e| DomainError::database_error(format!("Failed to count by location: {}", e)))?;
@@ -403,10 +409,94 @@ impl ResourceRepository for PostgresResourceRepository {
     }
 
     async fn count_by_environment(&self) -> DomainResult<Vec<(String, i64)>> {
-        let rows = sqlx::query("SELECT COALESCE(environment, 'Unknown') as env, COUNT(*) as count FROM resource GROUP BY environment ORDER BY count DESC")
+        let sql = "SELECT COALESCE(environment, 'Unknown') as env, COUNT(*) as count FROM resource GROUP BY environment ORDER BY count DESC";
+        tracing::info!("📊 Executing UNFILTERED count_by_environment SQL: {}", sql);
+        
+        let rows = sqlx::query(sql)
             .fetch_all(&self.pool)
             .await
             .map_err(|e| DomainError::database_error(format!("Failed to count by environment: {}", e)))?;
+
+        Ok(rows.into_iter().map(|row| (row.get("env"), row.get("count"))).collect())
+    }
+
+    // Filtered count methods for dashboard
+    async fn count_by_type_filtered(&self, subscription_id: Option<i64>, resource_group_id: Option<i64>, location: Option<&str>, environment: Option<&str>) -> DomainResult<Vec<(String, i64)>> {
+        let mut query = "SELECT type, COUNT(*) as count FROM resource WHERE 1=1".to_string();
+        
+        if let Some(sub_id) = subscription_id {
+            query.push_str(&format!(" AND subscription_id = {}", sub_id));
+        }
+        if let Some(rg_id) = resource_group_id {
+            query.push_str(&format!(" AND resource_group_id = {}", rg_id));
+        }
+        if let Some(loc) = location {
+            query.push_str(&format!(" AND location = '{}'", loc));
+        }
+        if let Some(env) = environment {
+            query.push_str(&format!(" AND environment = '{}'", env));
+        }
+        
+        query.push_str(" GROUP BY type ORDER BY count DESC");
+
+        tracing::info!("🔍 Executing filtered count_by_type SQL: {}", query);
+        tracing::info!("📊 With subscription_id: {:?}, resource_group_id: {:?}, location: {:?}, environment: {:?}", 
+                      subscription_id, resource_group_id, location, environment);
+
+        let rows = sqlx::query(&query)
+            .fetch_all(&self.pool)
+            .await
+            .map_err(|e| DomainError::database_error(format!("Failed to count by type filtered: {}", e)))?;
+
+        Ok(rows.into_iter().map(|row| (row.get("type"), row.get("count"))).collect())
+    }
+
+    async fn count_by_location_filtered(&self, subscription_id: Option<i64>, resource_group_id: Option<i64>, environment: Option<&str>) -> DomainResult<Vec<(String, i64)>> {
+        let mut query = "SELECT location, COUNT(*) as count FROM resource WHERE 1=1".to_string();
+        
+        if let Some(sub_id) = subscription_id {
+            query.push_str(&format!(" AND subscription_id = {}", sub_id));
+        }
+        if let Some(rg_id) = resource_group_id {
+            query.push_str(&format!(" AND resource_group_id = {}", rg_id));
+        }
+        if let Some(env) = environment {
+            query.push_str(&format!(" AND environment = '{}'", env));
+        }
+        
+        query.push_str(" GROUP BY location ORDER BY count DESC");
+        
+        tracing::info!("🔍 Executing filtered count_by_location SQL: {}", query);
+
+        let rows = sqlx::query(&query)
+            .fetch_all(&self.pool)
+            .await
+            .map_err(|e| DomainError::database_error(format!("Failed to count by location filtered: {}", e)))?;
+
+        Ok(rows.into_iter().map(|row| (row.get("location"), row.get("count"))).collect())
+    }
+
+    async fn count_by_environment_filtered(&self, subscription_id: Option<i64>, resource_group_id: Option<i64>, location: Option<&str>) -> DomainResult<Vec<(String, i64)>> {
+        let mut query = "SELECT COALESCE(environment, 'Unknown') as env, COUNT(*) as count FROM resource WHERE 1=1".to_string();
+        
+        if let Some(sub_id) = subscription_id {
+            query.push_str(&format!(" AND subscription_id = {}", sub_id));
+        }
+        if let Some(rg_id) = resource_group_id {
+            query.push_str(&format!(" AND resource_group_id = {}", rg_id));
+        }
+        if let Some(loc) = location {
+            query.push_str(&format!(" AND location = '{}'", loc));
+        }
+        
+        query.push_str(" GROUP BY environment ORDER BY count DESC");
+        
+        tracing::info!("🔍 Executing filtered count_by_environment SQL: {}", query);
+
+        let rows = sqlx::query(&query)
+            .fetch_all(&self.pool)
+            .await
+            .map_err(|e| DomainError::database_error(format!("Failed to count by environment filtered: {}", e)))?;
 
         Ok(rows.into_iter().map(|row| (row.get("env"), row.get("count"))).collect())
     }
