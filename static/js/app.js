@@ -1648,6 +1648,17 @@ class TechStockApp {
             search: document.getElementById('dashboard-search')?.value || ''
         };
         
+        // Debug: Check dropdown elements and their values
+        const subscriptionEl = document.getElementById('dashboard-subscription');
+        console.log('🔍 Subscription dropdown element:', subscriptionEl);
+        console.log('🔍 Subscription dropdown value:', subscriptionEl?.value);
+        console.log('🔍 Subscription dropdown options:', Array.from(subscriptionEl?.options || []).map(opt => ({value: opt.value, text: opt.text})));
+        
+        const locationEl = document.getElementById('dashboard-location');
+        console.log('🔍 Location dropdown element:', locationEl);
+        console.log('🔍 Location dropdown value:', locationEl?.value);
+        console.log('🔍 Location dropdown options:', Array.from(locationEl?.options || []).map(opt => ({value: opt.value, text: opt.text})));
+        
         // Update internal state with current UI values
         this.dashboardFilters = currentFilters;
         
@@ -1972,7 +1983,10 @@ class TechStockApp {
         // Render locations chart
         if (summary.locations && summary.locations.length > 0) {
             console.log('Rendering locations chart with', summary.locations.length, 'locations');
+            console.log('📍 Raw location data from API:', summary.locations);
             this.renderLocationsChartFromSummary(summary.locations);
+        } else {
+            console.warn('⚠️ No location data in summary:', summary.locations);
         }
         
         // Render environments chart
@@ -2091,13 +2105,27 @@ class TechStockApp {
     }
 
     renderLocationsChartFromSummary(locations) {
-        // Similar implementation for locations chart
-        console.log('Rendering locations chart from summary');
+        console.log('🗺️ Rendering locations chart from summary with', locations.length, 'locations');
+        console.log('📊 Location data:', locations);
+        
+        // Convert summary format to chart format
+        const locationData = locations.map(loc => [loc.location, loc.count]);
+        console.log('📈 Converted location data for chart:', locationData);
+        
+        // Use existing chart rendering method
+        this.renderLocationsChart(locationData);
     }
 
     renderEnvironmentsChartFromSummary(environments) {
-        // Similar implementation for environments chart  
-        console.log('Rendering environments chart from summary');
+        console.log('🌍 Rendering environments chart from summary with', environments.length, 'environments');
+        console.log('📊 Environment data:', environments);
+        
+        // Convert summary format to chart format
+        const envData = environments.map(env => [env.environment, env.count]);
+        console.log('📈 Converted environment data for chart:', envData);
+        
+        // Use existing chart rendering method
+        this.renderEnvironmentsChart(envData);
     }
 
     // Check data sources - call from console
@@ -2180,7 +2208,7 @@ class TechStockApp {
             
             console.log('Raw dashboard filters:', this.dashboardFilters);
             
-            if (this.dashboardFilters.subscription && this.dashboardFilters.subscription !== '') {
+            if (this.dashboardFilters && this.dashboardFilters.subscription && this.dashboardFilters.subscription !== '') {
                 const subId = parseInt(this.dashboardFilters.subscription);
                 if (!isNaN(subId)) {
                     filters.subscription_id = subId;
@@ -2244,6 +2272,9 @@ class TechStockApp {
                 console.log('Dashboard Summary received:', summary);
                 console.log('Total resources:', summary.total_resources);
                 console.log('Total resource types:', summary.resource_types?.length || 0);
+                console.log('Total locations:', summary.locations?.length || 0);
+                console.log('Total environments:', summary.environments?.length || 0);
+                console.log('📊 Summary structure:', Object.keys(summary));
                 
                 // Store dashboard summary
                 this.dashboardSummary = summary;
@@ -2300,9 +2331,8 @@ class TechStockApp {
             console.log('=== LOADING DASHBOARD DATA ===');
             console.log('Available resources in memory:', this.resources?.length || 0);
             
-            // Sync filters from Resources tab before loading
-            this.syncFiltersFromResourcesTab();
-            console.log('Current filters:', this.dashboardFilters);
+            // Don't sync from Resources tab - use Dashboard filters directly
+            console.log('Current dashboard filters:', this.dashboardFilters);
             
             // Load dashboard summary from API
             console.log('Loading dashboard summary from API...');
@@ -2662,25 +2692,46 @@ class TechStockApp {
     }
 
     renderLocationsChart(locationData) {
+        console.log('🎨 renderLocationsChart called with data:', locationData);
+        
         const ctx = document.getElementById('locations-chart');
-        if (!ctx) return;
+        if (!ctx) {
+            console.error('❌ locations-chart canvas not found!');
+            return;
+        }
 
         if (this.charts.locations) {
             this.charts.locations.destroy();
         }
 
         const top8 = locationData.slice(0, 8);
+        console.log('📊 Top 8 locations for chart:', top8);
+
+        // Filter out zero values and validate data
+        const validData = top8.filter(item => item[1] > 0);
+        console.log('✅ Valid data (count > 0):', validData);
+        
+        const labels = validData.map(item => item[0]);
+        const data = validData.map(item => item[1]);
+        const colors = [
+            '#3B82F6', '#EF4444', '#10B981', '#F59E0B',
+            '#8B5CF6', '#06B6D4', '#F97316', '#84CC16',
+            '#EC4899', '#14B8A6', '#F472B6', '#A78BFA',
+            '#FB7185', '#34D399', '#FBBF24', '#60A5FA'
+        ];
+        
+        console.log('🏷️ Chart labels:', labels);
+        console.log('📈 Chart data:', data);
+        console.log('🎨 Chart colors (first', labels.length, '):', colors.slice(0, labels.length));
+        console.log('📊 Data validation - Total items:', validData.length, 'Sum:', data.reduce((a, b) => a + b, 0));
 
         this.charts.locations = new Chart(ctx, {
             type: 'doughnut',
             data: {
-                labels: top8.map(item => item[0]),
+                labels: labels,
                 datasets: [{
-                    data: top8.map(item => item[1]),
-                    backgroundColor: [
-                        '#3B82F6', '#EF4444', '#10B981', '#F59E0B',
-                        '#8B5CF6', '#06B6D4', '#F97316', '#84CC16'
-                    ],
+                    data: data,
+                    backgroundColor: colors.slice(0, labels.length), // Only use needed colors
                     borderWidth: 2,
                     borderColor: '#ffffff'
                 }]
@@ -2691,14 +2742,50 @@ class TechStockApp {
                 plugins: {
                     legend: {
                         position: 'bottom',
+                        display: true,
                         labels: {
                             padding: 15,
-                            usePointStyle: true
+                            usePointStyle: true,
+                            generateLabels: function(chart) {
+                                const data = chart.data;
+                                if (data.labels.length && data.datasets.length) {
+                                    return data.labels.map((label, i) => {
+                                        const dataset = data.datasets[0];
+                                        const value = dataset.data[i];
+                                        return {
+                                            text: `${label}: ${value.toLocaleString()}`,
+                                            fillStyle: dataset.backgroundColor[i],
+                                            strokeStyle: dataset.borderColor,
+                                            lineWidth: dataset.borderWidth,
+                                            pointStyle: 'circle',
+                                            hidden: false,
+                                            index: i
+                                        };
+                                    });
+                                }
+                                return [];
+                            }
+                        }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const label = context.label || '';
+                                const value = context.parsed || 0;
+                                const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                const percentage = ((value / total) * 100).toFixed(1);
+                                return `${label}: ${value.toLocaleString()} (${percentage}%)`;
+                            }
                         }
                     }
                 }
             }
         });
+        
+        console.log('✅ Location chart created successfully');
+        console.log('📊 Chart instance:', this.charts.locations);
+        console.log('🎨 Chart data labels:', this.charts.locations.data.labels);
+        console.log('📈 Chart data values:', this.charts.locations.data.datasets[0].data);
     }
 
     renderEnvironmentsChart(envData) {

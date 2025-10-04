@@ -58,8 +58,23 @@ class ApiClient {
 
     // GET request
     async get(endpoint, params = {}, options = {}) {
-        const queryString = new URLSearchParams(params).toString();
+        console.log('🌐 ApiClient.get called with:', { endpoint, params });
+        
+        // Filter out undefined/null values
+        const cleanParams = {};
+        Object.keys(params).forEach(key => {
+            if (params[key] !== undefined && params[key] !== null && params[key] !== '') {
+                cleanParams[key] = params[key];
+            }
+        });
+        
+        console.log('🧹 Cleaned params:', cleanParams);
+        
+        const queryString = new URLSearchParams(cleanParams).toString();
         const url = queryString ? `${endpoint}?${queryString}` : endpoint;
+        
+        console.log('🔗 Final URL:', url);
+        console.log('📝 Query string:', queryString);
         
         return this.request(url, {
             method: 'GET',
