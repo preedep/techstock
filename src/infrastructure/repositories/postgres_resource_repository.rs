@@ -139,7 +139,12 @@ impl ResourceRepository for PostgresResourceRepository {
 
         if let Some(search) = &filters.search {
             let escaped_search = search.replace("'", "''");
-            where_conditions.push(format!("(name ILIKE '%{}%' OR type ILIKE '%{}%')", escaped_search, escaped_search));
+            // Search in multiple fields: name, type, azure_id, location, vendor, environment
+            where_conditions.push(format!(
+                "(name ILIKE '%{}%' OR type ILIKE '%{}%' OR COALESCE(azure_id, '') ILIKE '%{}%' OR location ILIKE '%{}%' OR COALESCE(vendor, '') ILIKE '%{}%' OR COALESCE(environment, '') ILIKE '%{}%')", 
+                escaped_search, escaped_search, escaped_search, escaped_search, escaped_search, escaped_search
+            ));
+            tracing::info!("🔍 Search query added for: '{}' - will search in name, type, azure_id, location, vendor, environment", search);
         }
 
         if let Some(tags_search) = &filters.tags {
@@ -184,17 +189,38 @@ impl ResourceRepository for PostgresResourceRepository {
             .map_err(|e| DomainError::database_error(format!("Failed to count resources: {}", e)))?;
         let total: i64 = total_row.get("count");
 
-        // Get paginated results
-        let query = format!(
-            r#"
-            SELECT id, azure_id, name, type, kind, location, subscription_id, resource_group_id,
-                   tags_json, extended_location, vendor, environment, provisioner, created_at, updated_at
-            FROM resource {}
-            ORDER BY {} {}
-            LIMIT {} OFFSET {}
-            "#,
-            where_clause, sort_field, sort_direction, size, offset
-        );
+        // Get paginated results with search relevance ordering
+        let query = if filters.search.is_some() {
+            let escaped_search = filters.search.as_ref().unwrap().replace("'", "''");
+            format!(
+                r#"
+                SELECT id, azure_id, name, type, kind, location, subscription_id, resource_group_id,
+                       tags_json, extended_location, vendor, environment, provisioner, created_at, updated_at
+                FROM resource {}
+                ORDER BY 
+                    CASE 
+                        WHEN name ILIKE '{}' THEN 1
+                        WHEN name ILIKE '{}%' THEN 2
+                        WHEN name ILIKE '%{}%' THEN 3
+                        ELSE 4
+                    END,
+                    {} {}
+                LIMIT {} OFFSET {}
+                "#,
+                where_clause, escaped_search, escaped_search, escaped_search, sort_field, sort_direction, size, offset
+            )
+        } else {
+            format!(
+                r#"
+                SELECT id, azure_id, name, type, kind, location, subscription_id, resource_group_id,
+                       tags_json, extended_location, vendor, environment, provisioner, created_at, updated_at
+                FROM resource {}
+                ORDER BY {} {}
+                LIMIT {} OFFSET {}
+                "#,
+                where_clause, sort_field, sort_direction, size, offset
+            )
+        };
 
         let rows = sqlx::query(&query)
             .fetch_all(&self.pool)

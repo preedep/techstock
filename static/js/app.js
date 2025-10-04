@@ -638,6 +638,7 @@ class TechStockApp {
             if (this.filters.search) {
                 params.search = this.filters.search;
                 console.log('✅ Added search filter:', this.filters.search);
+                console.log('🔍 Search will query: name, type, azure_id, location, vendor, environment');
             }
             if (this.filters.resource_type) {
                 params.resource_type = this.filters.resource_type;
